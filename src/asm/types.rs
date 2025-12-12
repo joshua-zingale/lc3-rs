@@ -29,6 +29,8 @@ pub struct Location {
     pub offset: usize,
 }
 
+
+
 impl Location {
     pub fn advance(&mut self, char: u8) {
         if char == b'\n' {
@@ -48,17 +50,35 @@ impl Location {
     }
 }
 
+impl Default for Location {
+    fn default() -> Self {
+        Location { line: 1, column: 1, offset: 0 }
+    }
+}
 
-
-#[derive(Debug, Clone)]
-pub enum ParsingError {
-    NonAsciiCharacter(char),
-    LabelTooLong(usize)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsingError{
+    pub kind: ParsingErrorKind,
+    pub start: Location,
+    pub end: Location,
 }
 
 impl fmt::Display for ParsingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use ParsingError::*;
+        write!(f, "line {} column {}: {}", self.start.line, self.start.column, self.kind)
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParsingErrorKind {
+    NonAsciiCharacter(char),
+    LabelTooLong(usize)
+}
+
+impl fmt::Display for ParsingErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ParsingErrorKind::*;
         match self {
             NonAsciiCharacter(c) => write!(f, "invalid ASCII character \"{}\"", c),
             LabelTooLong(length) => write!(f, "label must be 20 characters or less, but is {} characters long", length)
