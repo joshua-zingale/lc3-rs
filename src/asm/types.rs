@@ -73,7 +73,8 @@ impl fmt::Display for ParsingError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsingErrorKind {
     NonAsciiCharacter(char),
-    LabelTooLong(usize)
+    LabelTooLong(usize),
+    InvalidDecimalNumber(String),
 }
 
 impl fmt::Display for ParsingErrorKind {
@@ -81,7 +82,8 @@ impl fmt::Display for ParsingErrorKind {
         use ParsingErrorKind::*;
         match self {
             NonAsciiCharacter(c) => write!(f, "invalid ASCII character \"{}\"", c),
-            LabelTooLong(length) => write!(f, "label must be 20 characters or less, but is {} characters long", length)
+            LabelTooLong(length) => write!(f, "label must be 20 characters or less, but is {} characters long", length),
+            InvalidDecimalNumber(invalid_number) => write!(f, "invalid decimal number: {}", invalid_number)
         }
         
     }

@@ -88,8 +88,12 @@ impl<'a> Iterator for Lexer<'a> {
                 if lexeme_slice.len() == 2 && lexeme_slice[0] == b'r'  && (b'0'..=b'7').contains(&lexeme_slice[1]) {
                     return Some(Ok(self.make_lexeme(LexemeKind::Register(RegisterNum(lexeme_slice[1] - b'0')))))
                 }
-                if lexeme_slice.len() >= 2 && lexeme_slice[0] == b'#' && lexeme_slice[1..].iter().all(|x| (b'0'..=b'9').contains(x)) {
-                    // return Some(Ok(self.make_lexeme(LexemeKind::Immediate(lexeme_slice as i32))))
+                else if lexeme_slice.len() >= 2 && lexeme_slice[0] == b'#' && lexeme_slice[1..].iter().all(|x| (b'0'..=b'9').contains(x) || *x == b'-') {
+                    let str_number =  str::from_utf8(&lexeme_slice[1..]).expect("should be valid utf8");
+                    let Ok(value) = str_number.parse() else {
+                        return Some(Err(self.make_error(ParsingErrorKind::InvalidDecimalNumber(str_number.to_string()))))
+                    };
+                    return Some(Ok(self.make_lexeme(LexemeKind::Immediate(value))))
                 }
                 match lexeme_slice {
                     b"add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
@@ -242,6 +246,16 @@ mod tests {
                 (Location{line: 1, column: 4, offset: 3}, Location{line: 2, column: 2, offset: 5}),
                 (Location{line: 2, column: 2, offset: 5}, Location{line: 2, column: 5, offset: 8})
                 ]
+        )
+    }
+
+    #[test]
+    fn lexes_decimal_immediates() {
+        assert_eq!(
+            lex_unwrap_kind(b"#103 #3123 #-32"),
+            vec![
+                LexemeKind::Immediate(103), LexemeKind::Immediate(3123), LexemeKind::Immediate(-32)
+            ]
         )
     }
 
