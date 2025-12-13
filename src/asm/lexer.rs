@@ -1,5 +1,18 @@
 
+use std::ops::{BitOr};
+
 use crate::asm::types::{Location, ParsingError, ParsingErrorKind, RegisterNum};
+
+pub fn lex<'a>(source: &'a [u8]) -> Result<Vec<Lexeme<'a>>, Vec<Result<Lexeme<'a>, ParsingError>>> {
+    let lexemes: Vec<_> = Lexer::new(source).collect();
+
+    if lexemes.iter().all(Result::is_ok) {
+        Ok(lexemes.into_iter().map(Result::unwrap).collect())
+    } else {
+        Err(lexemes)
+    }
+}
+
 pub struct Lexer<'a>{
     source: &'a [u8],
     pos: Location,
@@ -50,10 +63,20 @@ impl<'a> Lexer<'a> {
     fn make_lexeme(&self, kind: LexemeKind<'a>) -> Lexeme<'a> {
         Lexeme{kind: kind, start: self.start_of_curr_lexeme, end: self.pos}
     }
+
+    fn advance_to_end_of_word(&mut self) {
+        while let Some(c) = self.peek_char() && !skippable(c) && c != b'\n' {
+            self.pos.advance_char();
+        }
+    }
 }
 
 fn skippable(char: u8) -> bool {
     return char == b' ' || char == b'\t' || char == b'\r' || char == b','
+}
+
+fn lowercase(chars: &[u8]) -> Vec<u8> {
+    chars.iter().map(|c| c.bitor(0x20)).collect()
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -80,22 +103,38 @@ impl<'a> Iterator for Lexer<'a> {
                 }
                 Ok(self.make_lexeme(LexemeKind::LineBreak))
             },
-            _ => {
-                while let Some(c) = self.peek_char() && !skippable(c) && c != b'\n' {
-                    self.pos.advance_char();
+            b'.' => {
+                self.advance_to_end_of_word();
+                let directive = &unsafe {self.lexeme_slice_unchecked()}[1..];
+                match &lowercase(directive)[..] {
+                    b"orig" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Orig))),
+                    b"end" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::End))),
+                    _ => {
+                        let directive_string = str::from_utf8(directive).expect("should be valid uft8");
+                        Err(self.make_error(ParsingErrorKind::InvalidDirective(directive_string.to_string())))
+                    }
                 }
-                let lexeme_slice= unsafe {self.lexeme_slice_unchecked()};
-                if lexeme_slice.len() == 2 && lexeme_slice[0] == b'r'  && (b'0'..=b'7').contains(&lexeme_slice[1]) {
-                    return Some(Ok(self.make_lexeme(LexemeKind::Register(RegisterNum(lexeme_slice[1] - b'0')))))
-                }
-                else if lexeme_slice.len() >= 2 && lexeme_slice[0] == b'#' && lexeme_slice[1..].iter().all(|x| (b'0'..=b'9').contains(x) || *x == b'-') {
-                    let str_number =  str::from_utf8(&lexeme_slice[1..]).expect("should be valid utf8");
+            }
+            b'#' => {
+                self.advance_to_end_of_word();
+                let lexeme_slice = unsafe {self.lexeme_slice_unchecked()};
+                let str_number =  str::from_utf8(&lexeme_slice[1..]).expect("should be valid utf8");
+                if lexeme_slice.len() >= 2 && lexeme_slice[0] == b'#' && lexeme_slice[1..].iter().all(|x| (b'0'..=b'9').contains(x) || *x == b'-') {
                     let Ok(value) = str_number.parse() else {
                         return Some(Err(self.make_error(ParsingErrorKind::InvalidDecimalNumber(str_number.to_string()))))
                     };
-                    return Some(Ok(self.make_lexeme(LexemeKind::Immediate(value))))
+                    Ok(self.make_lexeme(LexemeKind::Immediate(value)))
+                } else {
+                    Err(self.make_error(ParsingErrorKind::InvalidDecimalNumber(str_number.to_string())))
                 }
-                match lexeme_slice {
+            }
+            _ => {
+                self.advance_to_end_of_word();
+                let lexeme_slice= &unsafe {self.lexeme_slice_unchecked()}[..];
+                if lexeme_slice.len() == 2 && (lexeme_slice[0] == b'r' || lexeme_slice[0] == b'R') && (b'0'..=b'7').contains(&lexeme_slice[1]) {
+                    return Some(Ok(self.make_lexeme(LexemeKind::Register(RegisterNum(lexeme_slice[1] - b'0')))))
+                }
+                match &lowercase(lexeme_slice)[..] {
                     b"add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
                     b"and" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::And))),
                     _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
@@ -123,6 +162,26 @@ pub enum LexemeKind<'a> {
     Register(RegisterNum),
     String(Vec<u8>),
     LineBreak,
+}
+
+impl<'a> LexemeKind<'a> {
+    pub fn string_name(&self) -> String {
+        use LexemeKind::*;
+        match self {
+            Directive(sym) => {
+                format!("{} directive", match sym {
+                    DirectiveSymbol::Orig => "ORIG",
+                    DirectiveSymbol::End => "END"
+                })
+            },
+            Immediate(_) => "immediate".to_string(),
+            Instruction(_) => "instruction".to_string(),
+            Label(_) => "label".to_string(),
+            Register(_) => "register".to_string(),
+            String(_) => "string literal".to_string(),
+            LineBreak => "line break".to_string()
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -158,10 +217,6 @@ pub enum InstructionSymbol {
 mod tests {
     use super::*;
 
-    fn lex_unwrap(source: &[u8]) -> Vec<Lexeme> {
-        Lexer::new(source).map(|x| x.unwrap()).collect()
-    }
-
     fn lex_unwrap_kind(source: &[u8]) -> Vec<LexemeKind> {
         Lexer::new(source).map(|x| x.unwrap().kind).collect()
     }
@@ -172,13 +227,24 @@ mod tests {
             Err(e) => Some(e)
         }).collect()
     }
-     
+    #[test]
+    fn directives() {
+        assert_eq!(
+            lex_unwrap_kind(b".orig .end .oRig .END"),
+            vec![
+                LexemeKind::Directive(DirectiveSymbol::Orig),
+                LexemeKind::Directive(DirectiveSymbol::End),
+                LexemeKind::Directive(DirectiveSymbol::Orig),
+                LexemeKind::Directive(DirectiveSymbol::End)
+            ]
+        )
+    }
 
     #[test]
-    fn lexes_instruction_symbols() {
+    fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind(b"add and and add"),
+            lex_unwrap_kind(b"add AND and ADD"),
             vec![
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(And),
@@ -187,7 +253,7 @@ mod tests {
         )
     }
     #[test]
-    fn lexes_registers() {
+    fn registers() {
         assert_eq!(
             lex_unwrap_kind(b"r0 r1 r2 r3 r4 r5 r6 r7"),
             vec![
@@ -204,7 +270,7 @@ mod tests {
     }
 
      #[test]
-    fn lexes_line_break() {
+    fn line_break() {
         assert_eq!(
             lex_unwrap_kind(b"  \n \n \n\n \n"),
             vec![
@@ -214,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn lexes_labels() {
+    fn labels() {
         assert_eq!(
             lex_unwrap_kind(b"this is a whole lot of labels"),
             vec![
@@ -250,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn lexes_decimal_immediates() {
+    fn decimal_immediates() {
         assert_eq!(
             lex_unwrap_kind(b"#103 #3123 #-32"),
             vec![
@@ -268,6 +334,18 @@ mod tests {
                     kind: ParsingErrorKind::LabelTooLong(21),
                     start: Location{line:1,column:1, offset: 0},
                     end: Location{line: 1, column: 22, offset:21}}]
+        )
+    }
+
+    #[test]
+    fn invalid_decimal_number_error() {
+        assert_eq!(
+            lex_errors(b"#104 #3-3 #b5 #-3-").iter().map(|x| x.kind.clone()).collect::<Vec<_>>(),
+            vec![
+                ParsingErrorKind::InvalidDecimalNumber("3-3".to_string()),
+                ParsingErrorKind::InvalidDecimalNumber("b5".to_string()),
+                ParsingErrorKind::InvalidDecimalNumber("-3-".to_string()),
+            ]
         )
     }
 }

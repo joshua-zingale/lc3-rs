@@ -9,7 +9,7 @@ impl fmt::Display for InvalidNBitNumber {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegisterNum(pub u8);
 
 // impl RegisterNum {
@@ -57,7 +57,7 @@ impl Default for Location {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParsingError{
+pub struct ParsingError {
     pub kind: ParsingErrorKind,
     pub start: Location,
     pub end: Location,
@@ -75,6 +75,9 @@ pub enum ParsingErrorKind {
     NonAsciiCharacter(char),
     LabelTooLong(usize),
     InvalidDecimalNumber(String),
+    InvalidDirective(String),
+    ExpectedButFound(String, String),
+    UnsignedNumberOutOfRange(usize, i32),
 }
 
 impl fmt::Display for ParsingErrorKind {
@@ -83,7 +86,10 @@ impl fmt::Display for ParsingErrorKind {
         match self {
             NonAsciiCharacter(c) => write!(f, "invalid ASCII character \"{}\"", c),
             LabelTooLong(length) => write!(f, "label must be 20 characters or less, but is {} characters long", length),
-            InvalidDecimalNumber(invalid_number) => write!(f, "invalid decimal number: {}", invalid_number)
+            InvalidDecimalNumber(invalid_number) => write!(f, "invalid decimal number: {}", invalid_number),
+            InvalidDirective(invalid_directive) => write!(f, "invalid directive: {}", invalid_directive),
+            ExpectedButFound(expectation, finding) => write!(f, "expected {} but found {}", expectation, finding),
+            UnsignedNumberOutOfRange(maximum_bits, received_nuber) => write!(f, "{} is not a valid {}-bit usigned number", received_nuber, maximum_bits),
         }
         
     }
