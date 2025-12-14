@@ -1,10 +1,6 @@
-use crate::asm::{lexer::{DirectiveSymbol, Lexeme, LexemeKind, lex}, types::{Location, ParsingError, ParsingErrorKind, RegisterNum}};
+use crate::asm::{lexer::{DirectiveSymbol, Lexeme, LexemeKind}, types::{Location, ParsingError, ParsingErrorKind, RegisterNum}};
 
-pub fn parse(source: &[u8]) -> Result<Vec<Origin>, ParsingError> {
-    parse_from_lexemes(&lex(source).unwrap())
-}
-
-pub fn parse_from_lexemes(lexemes: &[Lexeme]) -> Result<Vec<Origin>, ParsingError> {
+pub fn parse<'a>(lexemes: &'a [Lexeme]) -> Result<Vec<Origin<'a>>, ParsingError> {
     
     let mut parser = Parser{pos: 0, lexemes};
 
@@ -21,27 +17,27 @@ pub fn parse_from_lexemes(lexemes: &[Lexeme]) -> Result<Vec<Origin>, ParsingErro
 
 struct Parser<'a> {
     pos: usize,
-    lexemes: &'a [Lexeme<'a>]
+    lexemes: &'a [Lexeme]
 }
 
 
 impl<'a> Parser<'a> {
 
-    fn parse_origin(&mut self) -> Result<Origin, ParsingError> {
-        self.consume(LexemeKind::Directive(DirectiveSymbol::Orig))?;
-        let address: u16 = match &self.curr_lexeme().kind {
-            LexemeKind::Immediate(value) => {
-                u16::try_from(*value).map_err(|_| self.make_error(ParsingErrorKind::UnsignedNumberOutOfRange(16, *value)))?
-            }
-            kind => return Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), kind.string_name())))
+    fn parse_origin(&mut self) -> Result<Origin<'a>, ParsingError> {
+        let orig_lexeme = self.consume(LexemeKind::Directive(DirectiveSymbol::Orig))?;
+        let immediate_lexeme: &Lexeme=  self.consume_any("immediate value")?;
+
+        let address: u16 = if let LexemeKind::Immediate(value)  = immediate_lexeme.kind {
+             u16::try_from(value).map_err(|_| self.make_error(ParsingErrorKind::UnsignedNumberOutOfRange(16, value)))?
+        } else {
+            return Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), immediate_lexeme.kind.string_name())))
         };
-        self.next_lexeme();
 
         self.consume(LexemeKind::LineBreak)?;
 
-        self.consume(LexemeKind::Directive(DirectiveSymbol::End))?;
+        let end_lexeme = self.consume(LexemeKind::Directive(DirectiveSymbol::End))?;
         
-        Ok(Origin{address, statements: vec![]})
+        Ok(Origin{address, statements: vec![], orig_lexeme, immediate_lexeme, end_lexeme})
     }
 
     fn make_error(&self, kind: ParsingErrorKind) -> ParsingError {
@@ -49,11 +45,26 @@ impl<'a> Parser<'a> {
         ParsingError { kind, start, end }
     }
 
-    fn curr_lexeme(&self) -> &'a Lexeme<'a> {
-        &self.lexemes[self.pos]
+    fn curr_lexeme(&self) -> Option<&'a Lexeme> {
+        self.lexemes.get(self.pos)
     }
 
-    fn next_lexeme(&mut self) -> Option<&'a Lexeme<'a>> {
+    fn consume_any(&mut self, name: &str) -> Result<&'a Lexeme, ParsingError> {
+        let res = self.curr_lexeme().ok_or_else(|| {
+            self.make_error(ParsingErrorKind::ExpectedButFound(
+                    name.to_string(),
+                    "end of file".to_string(),
+                ))
+            });
+
+        if res.is_ok() {
+            self.pos += 1;
+        }
+
+        res
+    }
+
+    fn next_lexeme(&mut self) -> Option<&'a Lexeme> {
         if self.pos < self.lexemes.len() {
             self.pos += 1;
             Some(&self.lexemes[self.pos - 1])
@@ -62,7 +73,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume_descriminant(&mut self, lexeme_kind: LexemeKind<'a>) -> Result<&Lexeme<'a>, ParsingError> {
+    fn consume_descriminant(&mut self, lexeme_kind: LexemeKind) -> Result<&'a Lexeme, ParsingError> {
         match self.lexemes.get(self.pos) {
             None => Err(ParsingError { kind: ParsingErrorKind::ExpectedButFound(lexeme_kind.string_name(), "end of file".to_string()), start: self.curr_lexeme_location().0, end: self.curr_lexeme_location().1 }),
             Some(lexeme) if std::mem::discriminant(&lexeme.kind) == std::mem::discriminant(&lexeme_kind) => {
@@ -73,7 +84,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&mut self, lexeme_kind: LexemeKind<'a>) -> Result<&Lexeme<'a>, ParsingError> {
+    fn consume(&mut self, lexeme_kind: LexemeKind) -> Result<&'a Lexeme, ParsingError> {
         match self.lexemes.get(self.pos) {
             None => Err(ParsingError { kind: ParsingErrorKind::ExpectedButFound(lexeme_kind.string_name(), "end of file".to_string()), start: self.curr_lexeme_location().0, end: self.curr_lexeme_location().1 }),
             Some(lexeme) if lexeme.kind == lexeme_kind => {
@@ -84,7 +95,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn skip(&mut self, lexeme_kind: LexemeKind<'a>) {
+    fn skip(&mut self, lexeme_kind: LexemeKind) {
         if self.pos < self.lexemes.len() && self.lexemes[self.pos].kind == lexeme_kind {
             self.pos += 1;
         }
@@ -102,13 +113,22 @@ impl<'a> Parser<'a> {
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Origin{
+pub struct Origin<'a> {
     pub address: u16,
-    pub statements: Vec<Statement>
+    pub statements: Vec<Statement<'a>>,
+    pub orig_lexeme: &'a Lexeme,
+    pub immediate_lexeme: &'a Lexeme,
+    pub end_lexeme: &'a Lexeme,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Statement {
+pub struct Statement<'a> {
+    kind: StatementKind,
+    lexemes: &'a[Lexeme]
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StatementKind {
     Add(RegisterNum, RegisterNum, RegisterNum),
     AddI(RegisterNum, RegisterNum, Imm5),
     And(RegisterNum, RegisterNum, RegisterNum),
@@ -152,14 +172,19 @@ impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::lexer::lex;
 
     #[test]
     fn empty_origin() {
+        let lexemes = lex(b".orig #100\n.end").unwrap();
         assert_eq!(
-            *parse(b".orig #100\n.end").unwrap().first().unwrap(),
+            *parse(&lexemes).unwrap().first().unwrap(),
             Origin{
                 address: 100,
-                statements: vec![]
+                statements: vec![],
+                orig_lexeme: &lexemes[0],
+                immediate_lexeme: &lexemes[1],
+                end_lexeme: &lexemes[3],
             },
         )
     }

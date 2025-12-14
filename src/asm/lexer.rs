@@ -3,9 +3,9 @@ use std::ops::{BitOr};
 
 use crate::asm::types::{Location, ParsingError, ParsingErrorKind, RegisterNum};
 
-pub fn lex<'a>(source: &'a [u8]) -> Result<Vec<Lexeme<'a>>, Vec<Result<Lexeme<'a>, ParsingError>>> {
+pub fn lex<'a>(source: &'a [u8]) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>>> {
     let lexemes: Vec<_> = Lexer::new(source).collect();
-
+    
     if lexemes.iter().all(Result::is_ok) {
         Ok(lexemes.into_iter().map(Result::unwrap).collect())
     } else {
@@ -60,7 +60,7 @@ impl<'a> Lexer<'a> {
     fn make_error(&self, kind: ParsingErrorKind) -> ParsingError {
         ParsingError{kind: kind, start: self.start_of_curr_lexeme, end: self.pos}
     }
-    fn make_lexeme(&self, kind: LexemeKind<'a>) -> Lexeme<'a> {
+    fn make_lexeme(&self, kind: LexemeKind ) -> Lexeme {
         Lexeme{kind: kind, start: self.start_of_curr_lexeme, end: self.pos}
     }
 
@@ -80,7 +80,7 @@ fn lowercase(chars: &[u8]) -> Vec<u8> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Lexeme<'a>, ParsingError>;
+    type Item = Result<Lexeme, ParsingError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(c) = self.peek_char() {
@@ -138,7 +138,7 @@ impl<'a> Iterator for Lexer<'a> {
                     b"add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
                     b"and" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::And))),
                     _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
-                    _ => Ok(self.make_lexeme(LexemeKind::Label(lexeme_slice)))
+                    _ => Ok(self.make_lexeme(LexemeKind::Label(lexeme_slice.to_vec())))
                 }
             }
         })
@@ -146,25 +146,25 @@ impl<'a> Iterator for Lexer<'a> {
 }
 
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Lexeme<'a> {
-    pub kind: LexemeKind<'a>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Lexeme {
+    pub kind: LexemeKind,
     pub start: Location,
     pub end: Location,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum LexemeKind<'a> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LexemeKind {
     Directive(DirectiveSymbol),
     Immediate(i32),
     Instruction(InstructionSymbol),
-    Label(&'a [u8]),
+    Label(Vec<u8>),
     Register(RegisterNum),
     String(Vec<u8>),
     LineBreak,
 }
 
-impl<'a> LexemeKind<'a> {
+impl LexemeKind {
     pub fn string_name(&self) -> String {
         use LexemeKind::*;
         match self {
@@ -184,13 +184,13 @@ impl<'a> LexemeKind<'a> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DirectiveSymbol {
     Orig,
     End,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstructionSymbol {
     Add,
     And,
@@ -284,13 +284,13 @@ mod tests {
         assert_eq!(
             lex_unwrap_kind(b"this is a whole lot of labels"),
             vec![
-                LexemeKind::Label(b"this"),
-                LexemeKind::Label(b"is"),
-                LexemeKind::Label(b"a"),
-                LexemeKind::Label(b"whole"),
-                LexemeKind::Label(b"lot"),
-                LexemeKind::Label(b"of"),
-                LexemeKind::Label(b"labels")
+                LexemeKind::Label(b"this".to_vec()),
+                LexemeKind::Label(b"is".to_vec()),
+                LexemeKind::Label(b"a".to_vec()),
+                LexemeKind::Label(b"whole".to_vec()),
+                LexemeKind::Label(b"lot".to_vec()),
+                LexemeKind::Label(b"of".to_vec()),
+                LexemeKind::Label(b"labels".to_vec())
                 ]
         )
     }
@@ -301,7 +301,7 @@ mod tests {
 
         let lexer = Lexer::new(b"add\n and");
 
-        let locs: Vec<_> = lexer.map(|x: Result<Lexeme<'_>, ParsingError>| {
+        let locs: Vec<_> = lexer.map(|x: Result<Lexeme, ParsingError>| {
             let l = x.unwrap();
             (l.start, l.end)}).collect();
         
