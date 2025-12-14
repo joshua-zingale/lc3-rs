@@ -1,27 +1,5 @@
 use core::fmt;
 
-#[derive(Debug, Clone)]
-struct InvalidNBitNumber(i32);
-
-impl fmt::Display for InvalidNBitNumber {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "number must be {}-bit", self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RegisterNum(pub u8);
-
-// impl RegisterNum {
-//     pub fn new(value: u8) -> Result<RegisterNum, InvalidNBitNumber> {
-//         if value >> 4 != 0 {
-//             Err(InvalidNBitNumber(4))
-//         } else {
-//             Ok(RegisterNum(value))
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Location {
     pub line: usize,
@@ -77,7 +55,8 @@ pub enum ParsingErrorKind {
     InvalidDecimalNumber(String),
     InvalidDirective(String),
     ExpectedButFound(String, String),
-    UnsignedNumberOutOfRange(usize, i32),
+    SignedNumberOutOfRange(u32, i32),
+    UnsignedNumberOutOfRange(u32, i32),
 }
 
 impl fmt::Display for ParsingErrorKind {
@@ -89,8 +68,58 @@ impl fmt::Display for ParsingErrorKind {
             InvalidDecimalNumber(invalid_number) => write!(f, "invalid decimal number: {}", invalid_number),
             InvalidDirective(invalid_directive) => write!(f, "invalid directive: {}", invalid_directive),
             ExpectedButFound(expectation, finding) => write!(f, "expected {} but found {}", expectation, finding),
+            SignedNumberOutOfRange(maximum_bits, received_nuber) => write!(f, "{} is not a valid {}-bit signed number", received_nuber, maximum_bits),
             UnsignedNumberOutOfRange(maximum_bits, received_nuber) => write!(f, "{} is not a valid {}-bit usigned number", received_nuber, maximum_bits),
         }
         
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NBitInt<const BITS: u32, const SIGNED: bool>(i32);
+
+impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
+    pub fn new(v: i32) -> Result<Self, ParsingErrorKind> {
+        {
+            let min = if SIGNED { -(1 << (BITS - 1)) } else { 0 };
+            let max = if SIGNED {
+                (1 << (BITS - 1)) - 1
+            } else {
+                (1 << BITS) - 1
+            };
+
+            if v < min || v > max {
+                if SIGNED {
+                    return Err(ParsingErrorKind::SignedNumberOutOfRange(BITS, v));
+                } else {
+                    return Err(ParsingErrorKind::UnsignedNumberOutOfRange(BITS, v));
+                }
+            }
+        }
+
+        let masked = if SIGNED {
+            let shift = 32 - BITS;
+            v << shift >> shift
+        } else {
+            v & ((1 << BITS) - 1)
+        };
+
+        Ok(Self(masked))
+    }
+
+    fn get(&self) -> i32 {
+        self.0
+    }
+}
+
+
+pub type Imm5 = NBitInt<5, true>;
+
+pub type RegisterNum = NBitInt<3, false>;
+
+pub type Address = NBitInt<16, false>;
+
+pub enum Either<A, B> {
+    A(A),
+    B(B),
 }

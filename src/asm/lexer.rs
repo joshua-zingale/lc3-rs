@@ -5,7 +5,7 @@ use crate::asm::types::{Location, ParsingError, ParsingErrorKind, RegisterNum};
 
 pub fn lex<'a>(source: &'a [u8]) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>>> {
     let lexemes: Vec<_> = Lexer::new(source).collect();
-    
+
     if lexemes.iter().all(Result::is_ok) {
         Ok(lexemes.into_iter().map(Result::unwrap).collect())
     } else {
@@ -132,7 +132,7 @@ impl<'a> Iterator for Lexer<'a> {
                 self.advance_to_end_of_word();
                 let lexeme_slice= &unsafe {self.lexeme_slice_unchecked()}[..];
                 if lexeme_slice.len() == 2 && (lexeme_slice[0] == b'r' || lexeme_slice[0] == b'R') && (b'0'..=b'7').contains(&lexeme_slice[1]) {
-                    return Some(Ok(self.make_lexeme(LexemeKind::Register(RegisterNum(lexeme_slice[1] - b'0')))))
+                    return Some(Ok(self.make_lexeme(LexemeKind::Register(RegisterNum::new(i32::try_from(lexeme_slice[1] - b'0').unwrap()).unwrap()))))
                 }
                 match &lowercase(lexeme_slice)[..] {
                     b"add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
@@ -216,6 +216,7 @@ pub enum InstructionSymbol {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::types::RegisterNum;
 
     fn lex_unwrap_kind(source: &[u8]) -> Vec<LexemeKind> {
         Lexer::new(source).map(|x| x.unwrap().kind).collect()
@@ -257,14 +258,14 @@ mod tests {
         assert_eq!(
             lex_unwrap_kind(b"r0 r1 r2 r3 r4 r5 r6 r7"),
             vec![
-                LexemeKind::Register(RegisterNum(0)),
-                LexemeKind::Register(RegisterNum(1)),
-                LexemeKind::Register(RegisterNum(2)),
-                LexemeKind::Register(RegisterNum(3)),
-                LexemeKind::Register(RegisterNum(4)),
-                LexemeKind::Register(RegisterNum(5)),
-                LexemeKind::Register(RegisterNum(6)),
-                LexemeKind::Register(RegisterNum(7))
+                LexemeKind::Register(RegisterNum::new(0).unwrap()),
+                LexemeKind::Register(RegisterNum::new(1).unwrap()),
+                LexemeKind::Register(RegisterNum::new(2).unwrap()),
+                LexemeKind::Register(RegisterNum::new(3).unwrap()),
+                LexemeKind::Register(RegisterNum::new(4).unwrap()),
+                LexemeKind::Register(RegisterNum::new(5).unwrap()),
+                LexemeKind::Register(RegisterNum::new(6).unwrap()),
+                LexemeKind::Register(RegisterNum::new(7).unwrap())
                 ]
         )
     }
