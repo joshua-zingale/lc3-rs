@@ -1,8 +1,12 @@
 use std::vec;
 
-use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind}, types::{Address, Either, Imm5, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum}};
+use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum}};
 
-pub fn parse_lexemes<'a>(lexemes: &'a [Lexeme]) -> Result<Vec<Origin<'a>>, Vec<ParsingError>> {
+pub fn parse(source: &[u8]) -> Result<(Vec<Origin>, Vec<Lexeme>), Vec<ParsingError>> {
+    todo!()
+}
+
+pub fn parse_lexemes(lexemes: &[Lexeme]) -> Result<Vec<Origin>, Vec<ParsingError>> {
     let mut errors = Vec::new();
     let mut parser = Parser{pos: 0, lexemes};
 
@@ -40,7 +44,7 @@ impl<'a> Parser<'a> {
         self.pos += 1;
     }
 
-    fn parse_origin(&mut self) -> Result<Origin<'a>, Vec<ParsingError>> {
+    fn parse_origin(&mut self) -> Result<Origin, Vec<ParsingError>> {
         let maybe_label = self.try_consume_label().map(|t| t.1);
         self.skip(LexemeKind::LineBreak);
 
@@ -78,7 +82,13 @@ impl<'a> Parser<'a> {
         if errors.len() > 0 {
             Err(errors)
         } else {
-            Ok(Origin{start_address: address, statements, orig_lexeme, immediate_lexeme, end_lexeme, label: maybe_label})
+            Ok(Origin{
+                start_address: address,
+                statements,
+                orig_lexeme: orig_lexeme.clone(),
+                immediate_lexeme: immediate_lexeme.clone(),
+                end_lexeme: end_lexeme.clone(),
+                label: maybe_label.map(Vec::from)})
         }
     }
 
@@ -117,7 +127,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume_statement(&mut self) -> Result<Statement<'a>, ParsingError> {
+    fn consume_statement(&mut self) -> Result<Statement, ParsingError> {
         let maybe_label = self.try_consume_label().map(|t| t.1);
         self.skip(LexemeKind::LineBreak);
         let instruction_lexeme = self.consume_any("instruction")?;
@@ -132,7 +142,7 @@ impl<'a> Parser<'a> {
                         Either::A(im) => StatementKind::AddI(r1, r2, im),
                         Either::B(reg) => StatementKind::Add(r1, r2, reg)
                     };
-                    Ok(Statement {kind, lexemes: &self.lexemes[self.pos-4..self.pos], label: maybe_label})
+                    Ok(Statement {kind, lexemes: self.lexemes[self.pos-4..self.pos].to_vec(), label: maybe_label.map(Vec::from)})
                 },
                 InstructionSymbol::And => {
                     let r1 = self.consume_register()?;
@@ -141,7 +151,10 @@ impl<'a> Parser<'a> {
                         Either::A(im) => StatementKind::AndI(r1, r2, im),
                         Either::B(reg) => StatementKind::And(r1, r2, reg)
                     };
-                    Ok(Statement {kind, lexemes: &self.lexemes[self.pos-4..self.pos], label: maybe_label})
+                    Ok(Statement {
+                        kind,
+                        lexemes: self.lexemes[self.pos-4..self.pos].to_vec(),
+                        label: maybe_label.map(Vec::from)})
                 },
             },
             _ => todo!()
@@ -221,20 +234,20 @@ impl<'a> Parser<'a> {
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Origin<'a> {
+pub struct Origin {
     pub start_address: Address,
-    pub statements: Vec<Statement<'a>>,
-    pub orig_lexeme: &'a Lexeme,
-    pub immediate_lexeme: &'a Lexeme,
-    pub end_lexeme: &'a Lexeme,
-    pub label: Option<&'a [u8]>,
+    pub statements: Vec<Statement>,
+    pub orig_lexeme: Lexeme,
+    pub immediate_lexeme: Lexeme,
+    pub end_lexeme: Lexeme,
+    pub label: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Statement<'a> {
+pub struct Statement {
     pub kind: StatementKind,
-    pub lexemes: &'a[Lexeme],
-    pub label: Option<&'a [u8]>
+    pub lexemes: Vec<Lexeme>,
+    pub label: Option<Vec<u8>>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -265,9 +278,9 @@ mod tests {
             Origin {
                 start_address: Address::new(100).unwrap(),
                 statements: vec![],
-                orig_lexeme: &lexemes[0],
-                immediate_lexeme: &lexemes[1],
-                end_lexeme: &lexemes[3],
+                orig_lexeme: lexemes[0].clone(),
+                immediate_lexeme: lexemes[1].clone(),
+                end_lexeme: lexemes[3].clone(),
                 label: None,
             },
         )
@@ -283,7 +296,7 @@ mod tests {
             vec![
                 Statement{
                     kind: StatementKind::Add(RegisterNum::new(0).unwrap(), RegisterNum::new(1).unwrap(), RegisterNum::new(2).unwrap()),
-                    lexemes: &lexemes[3..7],
+                    lexemes: lexemes[3..7].to_vec(),
                     label: None,
                 }
             ]
@@ -310,12 +323,12 @@ mod tests {
             vec![
                 Statement{
                     kind: StatementKind::AddI(RegisterNum::new(0).unwrap(), RegisterNum::new(1).unwrap(), Imm5::new(12).unwrap()),
-                    lexemes: &lexemes[3..7],
+                    lexemes: lexemes[3..7].to_vec(),
                     label: None,
                 },
                 Statement{
                     kind: StatementKind::And(RegisterNum::new(7).unwrap(), RegisterNum::new(2).unwrap(), RegisterNum::new(5).unwrap()),
-                    lexemes: &lexemes[8..12],
+                    lexemes: lexemes[8..12].to_vec(),
                     label: None,
                 }
             ]
@@ -333,7 +346,7 @@ mod tests {
     fn statement_with_label() {
         let lexemes = lex(b" .orig #3000\n someLabel add r0 r1 r2 \n.end").unwrap();
         assert_eq!(
-            parse_lexemes(&lexemes).unwrap()[0].statements[0].label.unwrap(),
+            parse_lexemes(&lexemes).unwrap()[0].statements[0].clone().label.unwrap(),
             b"somelabel"
         );
     }
@@ -342,7 +355,7 @@ mod tests {
     fn statement_with_label_before_linebreak() {
         let lexemes = lex(b" .orig #3000\n someLabel\n add r0 r1 r2 \n.end").unwrap();
         assert_eq!(
-            parse_lexemes(&lexemes).unwrap()[0].statements[0].label.unwrap(),
+            parse_lexemes(&lexemes).unwrap()[0].statements[0].clone().label.unwrap(),
             b"somelabel"
         );
     }
@@ -351,7 +364,7 @@ mod tests {
     fn origin_with_label() {
         let lexemes = lex(b" goodOrigin .orig #3000\n add r0 r1 r2 \n.end").unwrap();
         assert_eq!(
-            parse_lexemes(&lexemes).unwrap()[0].label.unwrap(),
+            parse_lexemes(&lexemes).unwrap()[0].clone().label.unwrap(),
             b"goodorigin"
         );
     }
@@ -360,7 +373,7 @@ mod tests {
     fn origin_with_label_before_linebreak() {
         let lexemes = lex(b" goodOrigin \n.orig #3000\n add r0 r1 r2 \n.end").unwrap();
         assert_eq!(
-            parse_lexemes(&lexemes).unwrap()[0].label.unwrap(),
+            parse_lexemes(&lexemes).unwrap()[0].clone().label.unwrap(),
             b"goodorigin"
         );
     }

@@ -85,8 +85,8 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
     let mut table = SymbolTable::new();
     let mut errors = Vec::new();
     for origin in origins {
-        if let Some(label) = origin.label {
-            if let Err(ae) = table.add(label, origin.start_address) {
+        if let Some(label) = &origin.label {
+            if let Err(ae) = table.add(&label, origin.start_address) {
                 errors.push(ae);
             }
         }
@@ -94,11 +94,11 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
         let mut pc = origin.start_address;
         let mut last_instuction_size = 0;
         for statement in &origin.statements {
-            if let Err(ae) = pc.increment(last_instuction_size).map_err(|e| AssemblyError::LabelOutOfRange(pc.get() + last_instuction_size)) {
+            if let Err(ae) = pc.increment(last_instuction_size).map_err(|_| AssemblyError::LabelOutOfRange(pc.get() + last_instuction_size)) {
                 errors.push(ae);
             }
-            if let Some(label) = statement.label {
-                if let Err(ae) = table.add(label, pc) {
+            if let Some(label) = &statement.label {
+                if let Err(ae) = table.add(&label, pc) {
                     errors.push(ae);
                 }
             }
