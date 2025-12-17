@@ -5,4 +5,3 @@ mod assembler;
 
 pub use lexer::Lexer;
 pub use parser::parse;
-pub use assembler::SymbolTable;

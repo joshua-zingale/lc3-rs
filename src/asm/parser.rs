@@ -1,18 +1,31 @@
+use std::vec;
+
 use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind}, types::{Address, Either, Imm5, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum}};
 
-pub fn parse<'a>(lexemes: &'a [Lexeme]) -> Result<Vec<Origin<'a>>, ParsingError> {
-    
+pub fn parse<'a>(lexemes: &'a [Lexeme]) -> Result<Vec<Origin<'a>>, Vec<ParsingError>> {
+    let mut errors = Vec::new();
     let mut parser = Parser{pos: 0, lexemes};
 
     let mut origins = Vec::new();
     parser.skip(LexemeKind::LineBreak);
     while parser.pos < lexemes.len(){
-        let origin = parser.parse_origin()?;
-        origins.push(origin);
-        parser.skip(LexemeKind::LineBreak);
+
+        match parser.parse_origin() {
+            Ok(origin) => {
+                origins.push(origin);
+                parser.skip(LexemeKind::LineBreak);
+            }
+            Err(errors_in_origin) => {
+                errors.extend(errors_in_origin);
+            }
+        }        
     }
 
-    return Ok(origins)
+    if errors.len() > 0 {
+        Err(errors)
+    } else {
+        Ok(origins)
+    }
 }
 
 struct Parser<'a> {
@@ -23,30 +36,57 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
 
-    fn parse_origin(&mut self) -> Result<Origin<'a>, ParsingError> {
+    fn advance(&mut self) {
+        self.pos += 1;
+    }
+
+    fn parse_origin(&mut self) -> Result<Origin<'a>, Vec<ParsingError>> {
         let maybe_label = self.try_consume_label().map(|t| t.1);
         self.skip(LexemeKind::LineBreak);
-        let orig_lexeme = self.consume(LexemeKind::Directive(DirectiveSymbol::Orig))?;
-        let (immediate_lexeme, address)=  self.consume_immediate::<16, false>()?;
-        
+
+        let orig_lexeme = self.consume(LexemeKind::Directive(DirectiveSymbol::Orig)).map_err(|e| vec![e])?;
+        let (immediate_lexeme, address)=  self.consume_immediate::<16, false>().map_err(|e| vec![e])?;
+
+        let mut errors = Vec::new();
+
+        if let Err(e) = self.consume(LexemeKind::LineBreak) {
+            errors.push(e);
+        }
+
         let mut statements = vec![];
-        self.consume(LexemeKind::LineBreak)?;
+
 
         while let Some(lex) = self.curr_lexeme() && lex.kind != LexemeKind::Directive(DirectiveSymbol::End) {
-            statements.push(self.consume_statement()?);
-            self.consume(LexemeKind::LineBreak)?;
+            match self.consume_statement() {
+                Ok(statement) => statements.push(statement),
+                Err(e) => {
+                    while let Some(lexeme) = self.curr_lexeme() && lexeme.kind != LexemeKind::LineBreak {
+                        let _ = self.advance();
+                    }
+                    errors.push(e)
+                },
+            }
+            if let Err(e) = self.consume(LexemeKind::LineBreak) {
+                errors.push(e);
+            }
         }
 
 
-        let end_lexeme = self.consume(LexemeKind::Directive(DirectiveSymbol::End))?;
+        let end_lexeme= self.consume(LexemeKind::Directive(DirectiveSymbol::End)).map_err(|e| vec![e])?;
         
-        Ok(Origin{address, statements, orig_lexeme, immediate_lexeme, end_lexeme, label: maybe_label})
+
+        if errors.len() > 0 {
+            Err(errors)
+        } else {
+            Ok(Origin{start_address: address, statements, orig_lexeme, immediate_lexeme, end_lexeme, label: maybe_label})
+        }
     }
 
     fn consume_immediate<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<(&'a Lexeme, NBitInt<BITS, SIGNED>), ParsingError> {
-        let immediate_lexeme=  self.consume_any("immediate value")?;
+        let immediate_lexeme=  self.curr_lexeme_or_error("immediate value")?;
         if let LexemeKind::Immediate(value)  = immediate_lexeme.kind {
-            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|kind| self.make_error(kind))?;
+            self.advance();
+            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
             Ok((immediate_lexeme, n_bit_int))
         } else {
             Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), immediate_lexeme.kind.string_name())))
@@ -54,8 +94,9 @@ impl<'a> Parser<'a> {
     }
 
     fn consume_register(&mut self) -> Result<RegisterNum, ParsingError> {
-        let register_lexeme=  self.consume_any("register")?;
+        let register_lexeme=  self.curr_lexeme_or_error("register")?;
         if let LexemeKind::Register(value)  = register_lexeme.kind {
+            self.advance();
             Ok(value)
         } else {
             Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), register_lexeme.kind.string_name())))
@@ -63,11 +104,13 @@ impl<'a> Parser<'a> {
     }
 
     fn consume_immediate_or_register<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<Either<NBitInt<BITS, SIGNED>, RegisterNum>, ParsingError> {
-        let lexeme=  self.consume_any("immediate value")?;
+        let lexeme=  self.curr_lexeme_or_error("immediate value")?;
         if let LexemeKind::Immediate(value)  = lexeme.kind {
-            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|kind| self.make_error(kind))?;
+            self.advance();
+            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
             Ok(Either::A( n_bit_int))
         } else if let LexemeKind::Register(value)  = lexeme.kind {
+            self.advance();
             Ok(Either::B(value))
         } else {
             Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value or register".to_string(), lexeme.kind.string_name())))
@@ -112,6 +155,17 @@ impl<'a> Parser<'a> {
 
     fn curr_lexeme(&self) -> Option<&'a Lexeme> {
         self.lexemes.get(self.pos)
+    }
+
+    fn curr_lexeme_or_error(&self, name: &str) -> Result<&'a Lexeme, ParsingError> {
+        let res = self.curr_lexeme().ok_or_else(|| {
+            self.make_error(ParsingErrorKind::ExpectedButFound(
+                    name.to_string(),
+                    "end of file".to_string(),
+                ))
+            });
+
+        res
     }
 
     fn consume_any(&mut self, name: &str) -> Result<&'a Lexeme, ParsingError> {
@@ -168,7 +222,7 @@ impl<'a> Parser<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Origin<'a> {
-    pub address: Address,
+    pub start_address: Address,
     pub statements: Vec<Statement<'a>>,
     pub orig_lexeme: &'a Lexeme,
     pub immediate_lexeme: &'a Lexeme,
@@ -209,7 +263,7 @@ mod tests {
         assert_eq!(
             *parse(&lexemes).unwrap().first().unwrap(),
             Origin {
-                address: Address::new(100).unwrap(),
+                start_address: Address::new(100).unwrap(),
                 statements: vec![],
                 orig_lexeme: &lexemes[0],
                 immediate_lexeme: &lexemes[1],
@@ -238,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn requires_newline_before_end() {
+    fn requires_newline_before_dot_end() {
         let lexemes = lex(b" .orig #3000\nadd r0 r1 r2 .end").unwrap();
         assert!(
             parse(&lexemes).is_err()
@@ -308,6 +362,15 @@ mod tests {
         assert_eq!(
             parse(&lexemes).unwrap()[0].label.unwrap(),
             b"goodorigin"
+        );
+    }
+
+    #[test]
+    fn three_errors_identified_in_origin() {
+        let lexemes = lex(b".orig #3000\nadd r0 r2 hello \n and r1 r2\n and r1 bob r2\n .end").unwrap();
+        assert_eq!(
+            parse(&lexemes).unwrap_err().len(),
+            3
         );
     }
 

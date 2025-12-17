@@ -55,8 +55,7 @@ pub enum ParsingErrorKind {
     InvalidDecimalNumber(String),
     InvalidDirective(String),
     ExpectedButFound(String, String),
-    SignedNumberOutOfRange(u32, i32),
-    UnsignedNumberOutOfRange(u32, i32),
+    ImmediateOutOfRange(u32, i32, bool),
 }
 
 impl fmt::Display for ParsingErrorKind {
@@ -68,10 +67,22 @@ impl fmt::Display for ParsingErrorKind {
             InvalidDecimalNumber(invalid_number) => write!(f, "invalid decimal number: {}", invalid_number),
             InvalidDirective(invalid_directive) => write!(f, "invalid directive: {}", invalid_directive),
             ExpectedButFound(expectation, finding) => write!(f, "expected {} but found {}", expectation, finding),
-            SignedNumberOutOfRange(maximum_bits, received_nuber) => write!(f, "{} is not a valid {}-bit signed number", received_nuber, maximum_bits),
-            UnsignedNumberOutOfRange(maximum_bits, received_nuber) => write!(f, "{} is not a valid {}-bit usigned number", received_nuber, maximum_bits),
+            ImmediateOutOfRange(num_bits, attempted_number, signed) => write!(f, "the number {} does not fit into a(n) {} immediate value of {}-bits", attempted_number, if *signed {"signed"} else {"unsigned"}, num_bits)
         }
-        
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NumberOutOfRangeError {
+    pub bits: u32,
+    pub attempted_num: i32,
+    pub signed: bool
+}
+
+
+impl fmt::Display for NumberOutOfRangeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+         write!(f, "{} is out of range for a {} {}-bit number", self.attempted_num, if self.signed {"signed"} else {"unsigned"}, self.bits)
     }
 }
 
@@ -79,7 +90,7 @@ impl fmt::Display for ParsingErrorKind {
 pub struct NBitInt<const BITS: u32, const SIGNED: bool>(i32);
 
 impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
-    pub fn new(v: i32) -> Result<Self, ParsingErrorKind> {
+    pub fn new(v: i32) -> Result<Self, NumberOutOfRangeError> {
         {
             let min = if SIGNED { -(1 << (BITS - 1)) } else { 0 };
             let max = if SIGNED {
@@ -89,11 +100,11 @@ impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
             };
 
             if v < min || v > max {
-                if SIGNED {
-                    return Err(ParsingErrorKind::SignedNumberOutOfRange(BITS, v));
-                } else {
-                    return Err(ParsingErrorKind::UnsignedNumberOutOfRange(BITS, v));
-                }
+                return Err(NumberOutOfRangeError {
+                    bits: BITS,
+                    attempted_num: v,
+                    signed: SIGNED,
+                });
             }
         }
 
@@ -107,7 +118,7 @@ impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
         Ok(Self(masked))
     }
 
-    pub fn increment(&mut self, v: i32) -> Result<(), ParsingErrorKind> {
+    pub fn increment(&mut self, v: i32) -> Result<(), NumberOutOfRangeError> {
         Ok(self.0 = Self::new(self.get() + v)?.get())
     }
 
