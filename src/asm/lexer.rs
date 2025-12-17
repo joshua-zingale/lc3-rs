@@ -138,7 +138,7 @@ impl<'a> Iterator for Lexer<'a> {
                     b"add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
                     b"and" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::And))),
                     _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
-                    _ => Ok(self.make_lexeme(LexemeKind::Label(lexeme_slice.to_vec())))
+                    lowercase_slice => Ok(self.make_lexeme(LexemeKind::Label(lowercase_slice.to_vec())))
                 }
             }
         })

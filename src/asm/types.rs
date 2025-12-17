@@ -1,4 +1,4 @@
-use core::fmt;
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Location {
@@ -107,8 +107,22 @@ impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
         Ok(Self(masked))
     }
 
-    fn get(&self) -> i32 {
+    pub fn increment(&mut self, v: i32) -> Result<(), ParsingErrorKind> {
+        Ok(self.0 = Self::new(self.get() + v)?.get())
+    }
+
+    pub fn get_u16(&self) -> u16 {
+        assert!(BITS <= 16);
+        self.0 as u16
+    }
+
+    pub fn get(&self) -> i32 {
         self.0
+    }
+
+    pub fn get_max_u16() -> u16 {
+        assert!(BITS - (if SIGNED {1} else {0}) <= 15);
+        (1 << (BITS - (if SIGNED {1} else {0}))) - 1
     }
 }
 
