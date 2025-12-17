@@ -3,7 +3,7 @@ use std::ops::{BitOr};
 
 use crate::asm::types::{Location, ParsingError, ParsingErrorKind, RegisterNum};
 
-pub fn lex<'a>(source: &'a [u8]) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>>> {
+pub fn lex(source: &[u8]) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>>> {
     let lexemes: Vec<_> = Lexer::new(source).collect();
 
     if lexemes.iter().all(Result::is_ok) {
