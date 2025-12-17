@@ -1,12 +1,12 @@
 use std::{collections::HashMap, fmt};
 
-use crate::asm::{lexer::lex, parse, parser::{Origin, StatementKind}, types::Address};
+use crate::asm::{lexer::lex, parse_lexemes, parser::{Origin, StatementKind}, types::Address};
 use crate::lc3_constants;
 
 
 fn assemble(source: &[u8]) -> Result<Vec<MachineCode>, ()> {
     let lexemes = lex(source).unwrap();
-    let origins = parse(&lexemes).unwrap();
+    let origins = parse_lexemes(&lexemes).unwrap();
     let table = get_symbol_table(&origins).unwrap();
     let codes = assemble_origins(&origins, &table).unwrap();
     Ok(codes)
@@ -164,13 +164,13 @@ impl fmt::Display for AssemblyError {
 #[cfg(test)]
 mod tests {
 
-    use crate::asm::{lexer::lex, parse, types::Address};
+    use crate::asm::{lexer::lex, parse_lexemes, types::Address};
     use super::*;
 
     #[test]
     fn get_empty_symbol_table() {
         let lexemes = lex(b".orig #300 \n add r0 r1 r2 \n add r4 r3 r2 \n add r1 r3 r2 \n .end").unwrap();
-        let origins = parse(&lexemes).unwrap();
+        let origins = parse_lexemes(&lexemes).unwrap();
         let table = get_symbol_table(&origins).unwrap();
 
         assert_eq!(table.labels().len(), 0);
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn symbol_table_one_origin_and_all_statements_have_label() {
         let lexemes = lex(b"l1 .orig #300 \n l2 add r0 r1 r2 \n l3 add r4 r3 r2 \n l4 add r1 r3 r2 \n .end").unwrap();
-        let origins = parse(&lexemes).unwrap();
+        let origins = parse_lexemes(&lexemes).unwrap();
         let table = get_symbol_table(&origins).unwrap();
         let mut labels_and_addresses: Vec<_> = table.labels().iter().map(|&l| (l, table.get(l).unwrap())).collect();
         labels_and_addresses.sort_by(|a, b| a.0.cmp(b.0));
