@@ -1,12 +1,11 @@
 use std::{collections::HashMap, fmt};
 
-use crate::asm::{lexer::lex, parse_lexemes, parser::{Origin, StatementKind}, types::Address};
+use crate::asm::{parser::{Origin, StatementKind, parse}, types::Address};
 use crate::lc3_constants;
 
 
-fn assemble(source: &[u8]) -> Result<Vec<MachineCode>, ()> {
-    let lexemes = lex(source).unwrap();
-    let origins = parse_lexemes(&lexemes).unwrap();
+fn assemble(source: &str) -> Result<Vec<MachineCode>, ()> {
+    let origins = parse(source).unwrap();
     let table = get_symbol_table(&origins).unwrap();
     let codes = assemble_origins(&origins, &table).unwrap();
     Ok(codes)
@@ -98,7 +97,7 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
                 errors.push(ae);
             }
             if let Some(label) = &statement.label {
-                if let Err(ae) = table.add(&label, pc) {
+                if let Err(ae) = table.add(label, pc) {
                     errors.push(ae);
                 }
             }
@@ -116,46 +115,46 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
 
 #[derive(Debug)]
 pub struct SymbolTable {
-    lookup: HashMap<Vec<u8>, Address>
+    lookup: HashMap<String, Address>
 }
 
 impl<'a> SymbolTable {
     pub fn new() -> SymbolTable {
         SymbolTable { lookup: HashMap::new() }
     }
-    pub fn add(&mut self, symbol: &[u8], address: Address) -> Result<(), AssemblyError> {
+    pub fn add(&mut self, symbol: &str, address: Address) -> Result<(), AssemblyError> {
         if self.lookup.contains_key(symbol) {
-            Err(AssemblyError::DoubleDefinedSymbol(symbol.to_vec()))
+            Err(AssemblyError::DoubleDefinedSymbol(symbol.to_string()))
         } else {
-            self.lookup.insert(symbol.to_vec(), address);
+            self.lookup.insert(symbol.to_string(), address);
             Ok(())
         }
     }
-    pub fn get(&self, symbol: &[u8]) -> Result<Address, AssemblyError> {
+    pub fn get(&self, symbol: &str) -> Result<Address, AssemblyError> {
         if let Some(address) = self.lookup.get(symbol) {
             Ok(*address)
         } else {
-            Err(AssemblyError::UndefinedSymbol(symbol.to_vec()))
+            Err(AssemblyError::UndefinedSymbol(symbol.to_string()))
         }
     }
 
-    pub fn labels(&'a self) -> Vec<&'a [u8]> {
-        self.lookup.keys().map(|x| x.as_slice()).collect()
+    pub fn labels(&'a self) -> Vec<&'a str> {
+        self.lookup.keys().map(|x| x.as_str()).collect()
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AssemblyError {
-    DoubleDefinedSymbol(Vec<u8>),
-    UndefinedSymbol(Vec<u8>),
+    DoubleDefinedSymbol(String),
+    UndefinedSymbol(String),
     LabelOutOfRange(i32),
 }
 
 impl fmt::Display for AssemblyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::DoubleDefinedSymbol(sym) => write!(f, "the label \"{}\" has been defined more than once", unsafe { String::from_utf8_unchecked(sym.clone()) }),
-            Self::UndefinedSymbol(sym) => write!(f, "the label \"{}\" has no definition", unsafe { String::from_utf8_unchecked(sym.clone())}),
+            Self::DoubleDefinedSymbol(sym) => write!(f, "the label \"{}\" has been defined more than once", sym),
+            Self::UndefinedSymbol(sym) => write!(f, "the label \"{}\" has no definition", sym),
             Self::LabelOutOfRange(address) => write!(f, "the label stands in for address \"{:x}\", which is out of range for the LC-3", address)
         }
     }
@@ -169,7 +168,7 @@ mod tests {
 
     #[test]
     fn get_empty_symbol_table() {
-        let lexemes = lex(b".orig #300 \n add r0 r1 r2 \n add r4 r3 r2 \n add r1 r3 r2 \n .end").unwrap();
+        let lexemes = lex(".orig #300 \n add r0 r1 r2 \n add r4 r3 r2 \n add r1 r3 r2 \n .end").unwrap();
         let origins = parse_lexemes(&lexemes).unwrap();
         let table = get_symbol_table(&origins).unwrap();
 
@@ -178,7 +177,7 @@ mod tests {
 
     #[test]
     fn symbol_table_one_origin_and_all_statements_have_label() {
-        let lexemes = lex(b"l1 .orig #300 \n l2 add r0 r1 r2 \n l3 add r4 r3 r2 \n l4 add r1 r3 r2 \n .end").unwrap();
+        let lexemes = lex("l1 .orig #300 \n l2 add r0 r1 r2 \n l3 add r4 r3 r2 \n l4 add r1 r3 r2 \n .end").unwrap();
         let origins = parse_lexemes(&lexemes).unwrap();
         let table = get_symbol_table(&origins).unwrap();
         let mut labels_and_addresses: Vec<_> = table.labels().iter().map(|&l| (l, table.get(l).unwrap())).collect();
@@ -186,10 +185,10 @@ mod tests {
         assert_eq!(
             labels_and_addresses,
             vec![
-                (&b"l1"[..], Address::new(300).unwrap()),
-                (&b"l2"[..], Address::new(300).unwrap()),
-                (&b"l3"[..], Address::new(301).unwrap()),
-                (&b"l4"[..], Address::new(302).unwrap()),
+                ("l1", Address::new(300).unwrap()),
+                ("l2", Address::new(300).unwrap()),
+                ("l3", Address::new(301).unwrap()),
+                ("l4", Address::new(302).unwrap()),
                 ]
         );
     }
@@ -197,7 +196,7 @@ mod tests {
     #[test]
     fn assembles_add_and_and() {
         assert_eq!(
-            assemble(b".orig #12288 \n add r0 r1 r2 \n and r3 r4 #0\n.end").unwrap(),
+            assemble(".orig #12288 \n add r0 r1 r2 \n and r3 r4 #0\n.end").unwrap(),
             vec![
                 MachineCode {
                     start_address: Address::new(12288).unwrap(),
@@ -212,7 +211,7 @@ mod tests {
     #[test]
     fn assembles_two_origins() {
         assert_eq!(
-            assemble(b".orig #12288 \n add r0 r1 r2 \n and r3 r4 #0\n.end\n.orig #12290 \n add r0 r1 r2 \n and r3 r4 #8\n.end").unwrap(),
+            assemble(".orig #12288 \n add r0 r1 r2 \n and r3 r4 #0\n.end\n.orig #12290 \n add r0 r1 r2 \n and r3 r4 #8\n.end").unwrap(),
             vec![
                 MachineCode {
                     start_address: Address::new(12288).unwrap(),

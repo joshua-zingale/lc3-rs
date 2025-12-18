@@ -2,8 +2,20 @@ use std::vec;
 
 use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum}};
 
-pub fn parse(source: &[u8]) -> Result<(Vec<Origin>, Vec<Lexeme>), Vec<ParsingError>> {
-    todo!()
+pub fn parse(source: &str) -> Result<Vec<Origin>, Vec<ParsingError>> {
+    let lexemes = lex(source);
+    match lexemes {
+        Err(mixed) => {
+            let mut errors = Vec::new();
+            for e in mixed {
+                if let Err(pe) = e {
+                    errors.push(pe)
+                }
+            }
+            Err(errors)
+        },
+        Ok(lexemes) => parse_lexemes(&lexemes)
+    }
 }
 
 pub fn parse_lexemes(lexemes: &[Lexeme]) -> Result<Vec<Origin>, Vec<ParsingError>> {
@@ -88,7 +100,7 @@ impl<'a> Parser<'a> {
                 orig_lexeme: orig_lexeme.clone(),
                 immediate_lexeme: immediate_lexeme.clone(),
                 end_lexeme: end_lexeme.clone(),
-                label: maybe_label.map(Vec::from)})
+                label: maybe_label.map(String::from)})
         }
     }
 
@@ -142,7 +154,7 @@ impl<'a> Parser<'a> {
                         Either::A(im) => StatementKind::AddI(r1, r2, im),
                         Either::B(reg) => StatementKind::Add(r1, r2, reg)
                     };
-                    Ok(Statement {kind, lexemes: self.lexemes[self.pos-4..self.pos].to_vec(), label: maybe_label.map(Vec::from)})
+                    Ok(Statement {kind, lexemes: self.lexemes[self.pos-4..self.pos].to_vec(), label: maybe_label.map(String::from)})
                 },
                 InstructionSymbol::And => {
                     let r1 = self.consume_register()?;
@@ -154,7 +166,7 @@ impl<'a> Parser<'a> {
                     Ok(Statement {
                         kind,
                         lexemes: self.lexemes[self.pos-4..self.pos].to_vec(),
-                        label: maybe_label.map(Vec::from)})
+                        label: maybe_label.map(String::from)})
                 },
             },
             _ => todo!()
@@ -196,7 +208,7 @@ impl<'a> Parser<'a> {
         res
     }
 
-    fn try_consume_label(&mut self) -> Option<(&'a Lexeme, &'a [u8])> {
+    fn try_consume_label(&mut self) -> Option<(&'a Lexeme, &'a str)> {
         if let Some(lexeme) = self.curr_lexeme() && let LexemeKind::Label(label) = &lexeme.kind {
             let _ = self.consume_any("label");
             Some((lexeme, label))
@@ -240,14 +252,14 @@ pub struct Origin {
     pub orig_lexeme: Lexeme,
     pub immediate_lexeme: Lexeme,
     pub end_lexeme: Lexeme,
-    pub label: Option<Vec<u8>>,
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Statement {
     pub kind: StatementKind,
     pub lexemes: Vec<Lexeme>,
-    pub label: Option<Vec<u8>>
+    pub label: Option<String>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,7 +284,7 @@ mod tests {
 
     #[test]
     fn empty_origin() {
-        let lexemes = lex(b".orig #100\n.end").unwrap();
+        let lexemes = lex(".orig #100\n.end").unwrap();
         assert_eq!(
             *parse_lexemes(&lexemes).unwrap().first().unwrap(),
             Origin {
@@ -288,7 +300,7 @@ mod tests {
 
     #[test]
     fn origin_with_one_statement() {
-        let lexemes = lex(b" .orig #3000\nadd r0 r1 r2 \n.end").unwrap();
+        let lexemes = lex(" .orig #3000\nadd r0 r1 r2 \n.end").unwrap();
         let origin = parse_lexemes(&lexemes).unwrap().first().unwrap().to_owned();
 
         assert_eq!(
@@ -306,7 +318,7 @@ mod tests {
 
     #[test]
     fn requires_newline_before_dot_end() {
-        let lexemes = lex(b" .orig #3000\nadd r0 r1 r2 .end").unwrap();
+        let lexemes = lex(" .orig #3000\nadd r0 r1 r2 .end").unwrap();
         assert!(
             parse_lexemes(&lexemes).is_err()
         )
@@ -315,7 +327,7 @@ mod tests {
 
     #[test]
     fn origin_with_two_statements() {
-        let lexemes = lex(b" .orig #3000\nadd r0 r1 #12\n  and r7 r2 r5 \n.end").unwrap();
+        let lexemes = lex(" .orig #3000\nadd r0 r1 #12\n  and r7 r2 r5 \n.end").unwrap();
         let origin = parse_lexemes(&lexemes).unwrap().first().unwrap().to_owned();
 
         assert_eq!(
@@ -338,49 +350,49 @@ mod tests {
 
     #[test]
     fn two_origins() {
-        let lexemes = lex(b" \n .ORIG #300 \n.end \n .orig #4002 \n\n\n .end");
+        let lexemes = lex(" \n .ORIG #300 \n.end \n .orig #4002 \n\n\n .end");
         assert_eq!(parse_lexemes(&lexemes.unwrap()).unwrap().len(), 2)
     }
 
     #[test]
     fn statement_with_label() {
-        let lexemes = lex(b" .orig #3000\n someLabel add r0 r1 r2 \n.end").unwrap();
+        let lexemes = lex(" .orig #3000\n someLabel add r0 r1 r2 \n.end").unwrap();
         assert_eq!(
             parse_lexemes(&lexemes).unwrap()[0].statements[0].clone().label.unwrap(),
-            b"somelabel"
+            "somelabel"
         );
     }
 
     #[test]
     fn statement_with_label_before_linebreak() {
-        let lexemes = lex(b" .orig #3000\n someLabel\n add r0 r1 r2 \n.end").unwrap();
+        let lexemes = lex(" .orig #3000\n someLabel\n add r0 r1 r2 \n.end").unwrap();
         assert_eq!(
             parse_lexemes(&lexemes).unwrap()[0].statements[0].clone().label.unwrap(),
-            b"somelabel"
+            "somelabel"
         );
     }
 
     #[test]
     fn origin_with_label() {
-        let lexemes = lex(b" goodOrigin .orig #3000\n add r0 r1 r2 \n.end").unwrap();
+        let lexemes = lex(" goodOrigin .orig #3000\n add r0 r1 r2 \n.end").unwrap();
         assert_eq!(
             parse_lexemes(&lexemes).unwrap()[0].clone().label.unwrap(),
-            b"goodorigin"
+            "goodorigin"
         );
     }
 
     #[test]
     fn origin_with_label_before_linebreak() {
-        let lexemes = lex(b" goodOrigin \n.orig #3000\n add r0 r1 r2 \n.end").unwrap();
+        let lexemes = lex(" goodOrigin \n.orig #3000\n add r0 r1 r2 \n.end").unwrap();
         assert_eq!(
             parse_lexemes(&lexemes).unwrap()[0].clone().label.unwrap(),
-            b"goodorigin"
+            "goodorigin"
         );
     }
 
     #[test]
     fn three_errors_identified_in_origin() {
-        let lexemes = lex(b".orig #3000\nadd r0 r2 hello \n and r1 r2\n and r1 bob r2\n .end").unwrap();
+        let lexemes = lex(".orig #3000\nadd r0 r2 hello \n and r1 r2\n and r1 bob r2\n .end").unwrap();
         assert_eq!(
             parse_lexemes(&lexemes).unwrap_err().len(),
             3

@@ -10,21 +10,15 @@ pub struct Location {
 
 
 impl Location {
-    pub fn advance(&mut self, char: u8) {
-        if char == b'\n' {
-            self.advance_line();
+    pub fn advance(&mut self, char: char) {
+        if char == '\n' {
+            self.line += 1;
+            self.column = 1;
         } else {
-            self.advance_char();
+            self.column += 1;
         }
-    }
-    pub fn advance_char(&mut self) {
-        self.column += 1;
-        self.offset += 1;
-    }
-    pub fn advance_line(&mut self) {
-        self.line += 1;
-        self.column = 1;
-        self.offset += 1;
+
+        self.offset += char.len_utf8();
     }
 }
 
@@ -56,6 +50,7 @@ pub enum ParsingErrorKind {
     InvalidDirective(String),
     ExpectedButFound(String, String),
     ImmediateOutOfRange(u32, i32, bool),
+    InvalidCharacterInLabel,
 }
 
 impl fmt::Display for ParsingErrorKind {
@@ -67,7 +62,8 @@ impl fmt::Display for ParsingErrorKind {
             InvalidDecimalNumber(invalid_number) => write!(f, "invalid decimal number: {}", invalid_number),
             InvalidDirective(invalid_directive) => write!(f, "invalid directive: {}", invalid_directive),
             ExpectedButFound(expectation, finding) => write!(f, "expected {} but found {}", expectation, finding),
-            ImmediateOutOfRange(num_bits, attempted_number, signed) => write!(f, "the number {} does not fit into a(n) {} immediate value of {}-bits", attempted_number, if *signed {"signed"} else {"unsigned"}, num_bits)
+            ImmediateOutOfRange(num_bits, attempted_number, signed) => write!(f, "the number {} does not fit into a(n) {} immediate value of {}-bits", attempted_number, if *signed {"signed"} else {"unsigned"}, num_bits),
+            InvalidCharacterInLabel => write!(f, "invalid character in label: labels must only contain ASCII letters and numbers and start with a letter")
         }
     }
 }
