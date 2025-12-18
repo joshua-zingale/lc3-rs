@@ -13,6 +13,7 @@ pub fn lex(source: &str) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>
     }
 }
 
+#[derive(Clone)]
 pub struct Lexer<'a>{
     source: &'a str,
     pos: Location,
@@ -52,6 +53,14 @@ impl<'a> Lexer<'a> {
     unsafe fn lexeme_slice_unchecked(&self) -> &'a str {
         &self.source[self.start_of_curr_lexeme.offset..self.pos.offset]
     }
+
+    fn peek_lexeme_cdr(&self) -> String {
+        let mut lexer = self.clone();
+        lexer.advance_to_end_of_word();
+        let mut lexeme = unsafe { lexer.lexeme_slice_unchecked() }.chars();
+        lexeme.next();
+        lexeme.collect()
+    }
     
     fn make_error(&self, kind: ParsingErrorKind) -> ParsingError {
         ParsingError{kind: kind, start: self.start_of_curr_lexeme, end: self.pos}
@@ -65,6 +74,7 @@ impl<'a> Lexer<'a> {
             self.pos.advance(c);
         }
     }
+
 }
 
 fn skippable(char: char) -> bool {
@@ -122,7 +132,11 @@ impl<'a> Iterator for Lexer<'a> {
                 } else {
                     Err(self.make_error(ParsingErrorKind::InvalidDecimalNumber(str_number.collect())))
                 }
-            }
+            },
+            'x' | 'X' if i32::from_str_radix(&self.peek_lexeme_cdr(), 16).is_ok() => {
+                self.advance_to_end_of_word();
+                Ok(self.make_lexeme(LexemeKind::Immediate(i32::from_str_radix(&self.peek_lexeme_cdr(), 16).unwrap())))
+            },
             _ => {
                 self.advance_to_end_of_word();
                 let lexeme_slice= unsafe {self.lexeme_slice_unchecked()};
@@ -326,6 +340,16 @@ mod tests {
             lex_unwrap_kind("#103 #3123 #-32"),
             vec![
                 LexemeKind::Immediate(103), LexemeKind::Immediate(3123), LexemeKind::Immediate(-32)
+            ]
+        )
+    }
+
+    #[test]
+    fn hex_immediates() {
+        assert_eq!(
+            lex_unwrap_kind("x103 X3123 x-32"),
+            vec![
+                LexemeKind::Immediate(0x103), LexemeKind::Immediate(0x3123), LexemeKind::Immediate(-0x32)
             ]
         )
     }

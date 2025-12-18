@@ -211,16 +211,16 @@ mod tests {
     #[test]
     fn assembles_two_origins() {
         assert_eq!(
-            assemble(".orig #12288 \n add r0 r1 r2 \n and r3 r4 #0\n.end\n.orig #12290 \n add r0 r1 r2 \n and r3 r4 #8\n.end").unwrap(),
+            assemble(".orig x3000 \n add r0 r1 r2 \n and r3 r4 #0\n.end\n.orig x3002 \n add r0 r1 r2 \n and r3 r4 #8\n.end").unwrap(),
             vec![
                 MachineCode {
-                    start_address: Address::new(12288).unwrap(),
+                    start_address: Address::new(0x3000).unwrap(),
                     code: vec![
                         0x1042, 0x5720
                     ]
                 },
                 MachineCode {
-                    start_address: Address::new(12290).unwrap(),
+                    start_address: Address::new(0x3002).unwrap(),
                     code: vec![
                         0x1042, 0x5728
                     ]
