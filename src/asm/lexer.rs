@@ -301,7 +301,7 @@ mod tests {
     #[test]
     fn labels() {
         assert_eq!(
-            lex_unwrap_kind("this is a whole lot of labels"),
+            lex_unwrap_kind("this is a whole lot of labels xray"),
             vec![
                 LexemeKind::Label("this".to_string()),
                 LexemeKind::Label("is".to_string()),
@@ -309,7 +309,8 @@ mod tests {
                 LexemeKind::Label("whole".to_string()),
                 LexemeKind::Label("lot".to_string()),
                 LexemeKind::Label("of".to_string()),
-                LexemeKind::Label("labels".to_string())
+                LexemeKind::Label("labels".to_string()),
+                LexemeKind::Label("xray".to_string())
                 ]
         )
     }
