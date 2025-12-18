@@ -52,10 +52,6 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
 
-    fn advance(&mut self) {
-        self.pos += 1;
-    }
-
     fn parse_origin(&mut self) -> Result<Origin, Vec<ParsingError>> {
         let maybe_label = self.try_consume_label().map(|t| t.1);
         self.skip(LexemeKind::LineBreak);
@@ -104,40 +100,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume_immediate<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<(&'a Lexeme, NBitInt<BITS, SIGNED>), ParsingError> {
-        let immediate_lexeme=  self.curr_lexeme_or_error("immediate value")?;
-        if let LexemeKind::Immediate(value)  = immediate_lexeme.kind {
-            self.advance();
-            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
-            Ok((immediate_lexeme, n_bit_int))
-        } else {
-            Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), immediate_lexeme.kind.string_name())))
-        }
-    }
-
-    fn consume_register(&mut self) -> Result<RegisterNum, ParsingError> {
-        let register_lexeme=  self.curr_lexeme_or_error("register")?;
-        if let LexemeKind::Register(value)  = register_lexeme.kind {
-            self.advance();
-            Ok(value)
-        } else {
-            Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), register_lexeme.kind.string_name())))
-        }
-    }
-
-    fn consume_immediate_or_register<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<Either<NBitInt<BITS, SIGNED>, RegisterNum>, ParsingError> {
-        let lexeme=  self.curr_lexeme_or_error("immediate value")?;
-        if let LexemeKind::Immediate(value)  = lexeme.kind {
-            self.advance();
-            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
-            Ok(Either::A( n_bit_int))
-        } else if let LexemeKind::Register(value)  = lexeme.kind {
-            self.advance();
-            Ok(Either::B(value))
-        } else {
-            Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value or register".to_string(), lexeme.kind.string_name())))
-        }
-    }
 
     fn consume_statement(&mut self) -> Result<Statement, ParsingError> {
         let maybe_label = self.try_consume_label().map(|t| t.1);
@@ -170,6 +132,46 @@ impl<'a> Parser<'a> {
                 },
             },
             _ => todo!()
+        }
+    }
+
+    fn advance(&mut self) {
+        self.pos += 1;
+    }
+
+
+    fn consume_immediate<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<(&'a Lexeme, NBitInt<BITS, SIGNED>), ParsingError> {
+        let immediate_lexeme=  self.curr_lexeme_or_error("immediate value")?;
+        if let LexemeKind::Immediate(value)  = immediate_lexeme.kind {
+            self.advance();
+            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
+            Ok((immediate_lexeme, n_bit_int))
+        } else {
+            Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), immediate_lexeme.kind.string_name())))
+        }
+    }
+
+    fn consume_register(&mut self) -> Result<RegisterNum, ParsingError> {
+        let register_lexeme=  self.curr_lexeme_or_error("register")?;
+        if let LexemeKind::Register(value)  = register_lexeme.kind {
+            self.advance();
+            Ok(value)
+        } else {
+            Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), register_lexeme.kind.string_name())))
+        }
+    }
+
+    fn consume_immediate_or_register<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<Either<NBitInt<BITS, SIGNED>, RegisterNum>, ParsingError> {
+        let lexeme=  self.curr_lexeme_or_error("immediate value")?;
+        if let LexemeKind::Immediate(value)  = lexeme.kind {
+            self.advance();
+            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
+            Ok(Either::A( n_bit_int))
+        } else if let LexemeKind::Register(value)  = lexeme.kind {
+            self.advance();
+            Ok(Either::B(value))
+        } else {
+            Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value or register".to_string(), lexeme.kind.string_name())))
         }
     }
 
