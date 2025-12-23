@@ -148,6 +148,7 @@ impl<'a> Iterator for Lexer<'a> {
                     "add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
                     "and" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::And))),
                     "not" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Not))),
+                    "ret" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ret))),
                     _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
                     slice if !(
                         slice.chars().all(|c|
@@ -222,7 +223,7 @@ pub enum InstructionSymbol {
     // Ldr,
     // Lea,
     Not,
-    // Ret,
+    Ret,
     // Rti,
     // Sti,
     // Str,
@@ -264,14 +265,16 @@ mod tests {
     fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind("add AdD and aND not Not"),
+            lex_unwrap_kind("add AdD and aND not Not ret rEt"),
             vec![
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(And),
                 LexemeKind::Instruction(And),
                 LexemeKind::Instruction(Not),
-                LexemeKind::Instruction(Not)]
+                LexemeKind::Instruction(Not),
+                LexemeKind::Instruction(Ret),
+                LexemeKind::Instruction(Ret),]
         )
     }
     #[test]

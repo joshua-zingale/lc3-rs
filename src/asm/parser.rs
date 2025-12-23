@@ -137,6 +137,12 @@ impl<'a> Parser<'a> {
                         kind: StatementKind::Not(r1, r2),
                         lexemes: self.lexemes[self.pos-3..self.pos].to_vec(), label: maybe_label
                     })
+                },
+                InstructionSymbol::Ret => {
+                    Ok(Statement {
+                        kind: StatementKind::Jmp(NBitInt::new(7).unwrap()),
+                        lexemes: self.lexemes[self.pos-1..self.pos].to_vec(), label: maybe_label
+                    })
                 }
             },
             _ => todo!()
@@ -279,6 +285,7 @@ pub enum StatementKind {
     And(RegisterNum, RegisterNum, RegisterNum),
     AndI(RegisterNum, RegisterNum, Imm5),
     Not(RegisterNum, RegisterNum),
+    Jmp(RegisterNum),
 
 }
 
