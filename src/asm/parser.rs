@@ -144,11 +144,15 @@ impl<'a> Parser<'a> {
                         lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
                         label: maybe_label })
                 }
-                symbol @ InstructionSymbol::Ld => {
+                symbol @ (InstructionSymbol::Ld | InstructionSymbol::Ldi | InstructionSymbol::Lea | InstructionSymbol::St | InstructionSymbol::Sti) => {
                     let r0 = self.consume_register()?;
                     let label = self.consume_label()?;
                     let imm9_kind = match symbol {
                         InstructionSymbol::Ld => Imm9Kind::Ld,
+                        InstructionSymbol::Ldi => Imm9Kind::Ldi,
+                        InstructionSymbol::Lea => Imm9Kind::Lea,
+                        InstructionSymbol::St => Imm9Kind::St,
+                        InstructionSymbol::Sti => Imm9Kind::Sti,
                         _ => unreachable!()
                     };
 
@@ -347,10 +351,10 @@ pub enum StatementKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Imm9Kind {
     Ld,
-    // Ldi,
-    // Lea,
-    // St,
-    // Sti,
+    Ldi,
+    Lea,
+    St,
+    Sti,
 }
 
 

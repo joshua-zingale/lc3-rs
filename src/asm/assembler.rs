@@ -58,6 +58,10 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
         StatementKind::Imm9MemInstruction(kind, r0, label) => {
             let instruction= match kind {
                 Imm9Kind::Ld => lc3_constants::LD,
+                Imm9Kind::Ldi => lc3_constants::LDI,
+                Imm9Kind::Lea => lc3_constants::LEA,
+                Imm9Kind::St => lc3_constants::ST,
+                Imm9Kind::Sti => lc3_constants::STI,
             };
             let signed_offset = symbol_table.get(label)? as i32 - pc as i32;
             let _ = NBitInt::<9, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(label.clone(), signed_offset, 9))?;
@@ -252,14 +256,18 @@ mod tests {
             add r0 r1 r2
             add r3 r4 #0
             and r1 r2 r3
-            and r1 r2 #15
+            label and r1 r2 #15
             jmp r6
             jsrr r5
             ld r2 label
+            ldi r3 label
+            lea r4 label
             not r1 r2
             ret
             rti
-            label trap x18
+            st r5 label
+            sti r5 label
+            trap x18
             .end").unwrap(),
             vec![
                 MachineCode {
@@ -271,10 +279,14 @@ mod tests {
                         0x52AF, // and
                         0xC180, // jmp
                         0x4140, // jsrr
-                        0x2403, // ld
+                        0x25FC, // ld
+                        0xA7FB, // ldi
+                        0xE9FA, // lea
                         0x92BF, // not
                         0xC1C0, // ret
                         0x8000, // rti
+                        0x3BF6, // st
+                        0xBBF5, // sti
                         0xF018, // trap
                     ]
                 }

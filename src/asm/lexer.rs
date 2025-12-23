@@ -150,9 +150,13 @@ impl<'a> Iterator for Lexer<'a> {
                     "jmp" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jmp))),
                     "jsrr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jsrr))),
                     "ld" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ld))),
+                    "ldi" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ldi))),
+                    "lea" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Lea))),
                     "not" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Not))),
                     "ret" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ret))),
                     "rti" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Rti))),
+                    "st" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::St))),
+                    "sti" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Sti))),
                     "trap" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Trap))),
                     _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
                     slice if !(
@@ -224,13 +228,14 @@ pub enum InstructionSymbol {
     // Jsr,
     Jsrr,
     Ld,
-    // Ldi,
+    Ldi,
     // Ldr,
-    // Lea,
+    Lea,
     Not,
     Ret,
     Rti,
-    // Sti,
+    St,
+    Sti,
     // Str,
     Trap,
     // Out,
@@ -270,7 +275,7 @@ mod tests {
     fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind("add AdD and aND jmp JmP jsrr JSRR not Not ret rEt"),
+            lex_unwrap_kind("add AdD and aND jmp JmP jsrr JSRR ld Ld ldi lDI lea LEa not Not ret rEt rti RTI st ST sti sTi"),
             vec![
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(Add),
@@ -280,10 +285,22 @@ mod tests {
                 LexemeKind::Instruction(Jmp),
                 LexemeKind::Instruction(Jsrr),
                 LexemeKind::Instruction(Jsrr),
+                LexemeKind::Instruction(Ld),
+                LexemeKind::Instruction(Ld),
+                LexemeKind::Instruction(Ldi),
+                LexemeKind::Instruction(Ldi),
+                LexemeKind::Instruction(Lea),
+                LexemeKind::Instruction(Lea),
                 LexemeKind::Instruction(Not),
                 LexemeKind::Instruction(Not),
                 LexemeKind::Instruction(Ret),
-                LexemeKind::Instruction(Ret),]
+                LexemeKind::Instruction(Ret),
+                LexemeKind::Instruction(Rti),
+                LexemeKind::Instruction(Rti),
+                LexemeKind::Instruction(St),
+                LexemeKind::Instruction(St),
+                LexemeKind::Instruction(Sti),
+                LexemeKind::Instruction(Sti),]
         )
     }
     #[test]
