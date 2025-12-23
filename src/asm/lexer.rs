@@ -41,7 +41,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    unsafe fn advance_char(&mut self) {
+    fn advance_char(&mut self) {
         let char = self.peek_char().unwrap();
         self.pos.advance(char);
     }
@@ -50,14 +50,14 @@ impl<'a> Lexer<'a> {
         self.start_of_curr_lexeme = self.pos;
     }
 
-    unsafe fn lexeme_slice_unchecked(&self) -> &'a str {
+    fn lexeme_slice_unchecked(&self) -> &'a str {
         &self.source[self.start_of_curr_lexeme.offset..self.pos.offset]
     }
 
     fn peek_lexeme_cdr(&self) -> String {
         let mut lexer = self.clone();
         lexer.advance_to_end_of_word();
-        let mut lexeme = unsafe { lexer.lexeme_slice_unchecked() }.chars();
+        let mut lexeme = lexer.lexeme_slice_unchecked().chars();
         lexeme.next();
         lexeme.collect()
     }
@@ -93,9 +93,9 @@ impl<'a> Iterator for Lexer<'a> {
             if !skippable(c) {
                 break
             }
-            unsafe {
-                self.advance_char();
-            }
+
+            self.advance_char();
+
         }
 
         self.start_lexeme();
@@ -105,13 +105,13 @@ impl<'a> Iterator for Lexer<'a> {
         return Some(match first_char {
             '\n' => {
                 while let Some(c) = self.peek_char() && (skippable(c) || c == '\n') {
-                    unsafe { self.advance_char() };
+                    self.advance_char();
                 }
                 Ok(self.make_lexeme(LexemeKind::LineBreak))
             },
             '.' => {
                 self.advance_to_end_of_word();
-                let directive = &unsafe {self.lexeme_slice_unchecked()}[1..];
+                let directive = &self.lexeme_slice_unchecked()[1..];
                 match directive.to_lowercase().as_str() {
                     "orig" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Orig))),
                     "end" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::End))),
@@ -122,7 +122,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             '#' => {
                 self.advance_to_end_of_word();
-                let lexeme_slice = unsafe {self.lexeme_slice_unchecked()};
+                let lexeme_slice = self.lexeme_slice_unchecked();
                 let str_number =  lexeme_slice['#'.len_utf8()..].chars();
                 if lexeme_slice.len() >= 2 {
                     let Ok(value) = str_number.as_str().parse() else {
@@ -139,7 +139,7 @@ impl<'a> Iterator for Lexer<'a> {
             },
             _ => {
                 self.advance_to_end_of_word();
-                let lexeme_slice= unsafe {self.lexeme_slice_unchecked()};
+                let lexeme_slice= self.lexeme_slice_unchecked();
                 let lexeme_slice_bytes = lexeme_slice.as_bytes();
                 if lexeme_slice_bytes.len() == 2 && (lexeme_slice_bytes[0] == b'r' || lexeme_slice_bytes[0] == b'R') && (b'0'..=b'7').contains(&lexeme_slice_bytes[1]) {
                     return Some(Ok(self.make_lexeme(LexemeKind::Register(RegisterNum::new(i32::try_from(lexeme_slice_bytes[1] - b'0').unwrap()).unwrap()))))
