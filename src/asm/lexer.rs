@@ -151,6 +151,7 @@ impl<'a> Iterator for Lexer<'a> {
                     "jsrr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jsrr))),
                     "not" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Not))),
                     "ret" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ret))),
+                    "rti" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Rti))),
                     _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
                     slice if !(
                         slice.chars().all(|c|
@@ -226,7 +227,7 @@ pub enum InstructionSymbol {
     // Lea,
     Not,
     Ret,
-    // Rti,
+    Rti,
     // Sti,
     // Str,
     // Trap,

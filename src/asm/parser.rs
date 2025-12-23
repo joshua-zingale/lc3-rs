@@ -157,6 +157,12 @@ impl<'a> Parser<'a> {
                         kind: StatementKind::Jmp(NBitInt::new(7).unwrap()),
                         lexemes: self.lexemes[self.pos-1..self.pos].to_vec(), label: maybe_label
                     })
+                },
+                InstructionSymbol::Rti => {
+                    Ok(Statement {
+                        kind: StatementKind::Rti,
+                        lexemes: self.lexemes[self.pos-1..self.pos].to_vec(), label: maybe_label
+                    })
                 }
             },
             _ => todo!()
@@ -301,6 +307,7 @@ pub enum StatementKind {
     Jmp(RegisterNum),
     Jsrr(RegisterNum),
     Not(RegisterNum, RegisterNum),
+    Rti,
 
 }
 
