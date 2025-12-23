@@ -147,15 +147,16 @@ impl<'a> Iterator for Lexer<'a> {
                 match lexeme_slice.to_lowercase().as_str() {
                     "add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
                     "and" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::And))),
+                    "not" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Not))),
+                    _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
                     slice if !(
                         slice.chars().all(|c|
                             ('a'..='z').contains(&c)
                             || ('A'..='Z').contains(&c)
                             || ('0'..='9').contains(&c))
-                    && (
-                        ('a'..='z').contains(&first_char)
-                        || ('A'..='Z').contains(&first_char))) => Err(self.make_error(ParsingErrorKind::InvalidCharacterInLabel)),
-                    _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
+                        && (
+                            ('a'..='z').contains(&first_char)
+                            || ('A'..='Z').contains(&first_char))) => Err(self.make_error(ParsingErrorKind::InvalidCharacterInLabel)),
                     lowercase_slice => Ok(self.make_lexeme(LexemeKind::Label(lowercase_slice.to_string())))
                 }
             }
@@ -220,7 +221,7 @@ pub enum InstructionSymbol {
     // Ldi,
     // Ldr,
     // Lea,
-    // Not,
+    Not,
     // Ret,
     // Rti,
     // Sti,
@@ -263,12 +264,14 @@ mod tests {
     fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind("add AND and ADD"),
+            lex_unwrap_kind("add AdD and aND not Not"),
             vec![
+                LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(And),
                 LexemeKind::Instruction(And),
-                LexemeKind::Instruction(Add),]
+                LexemeKind::Instruction(Not),
+                LexemeKind::Instruction(Not)]
         )
     }
     #[test]

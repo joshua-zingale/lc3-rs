@@ -4,14 +4,14 @@ use crate::asm::{parser::{Origin, StatementKind, parse}, types::Address};
 use crate::lc3_constants;
 
 
-fn assemble(source: &str) -> Result<Vec<MachineCode>, ()> {
+pub fn assemble(source: &str) -> Result<Vec<MachineCode>, ()> {
     let origins = parse(source).unwrap();
     let table = get_symbol_table(&origins).unwrap();
     let codes = assemble_origins(&origins, &table).unwrap();
     Ok(codes)
 }
 
-fn assemble_origins(origins: &[Origin], symbol_table: &SymbolTable) -> Result<Vec<MachineCode>, Vec<AssemblyError>> {
+pub fn assemble_origins(origins: &[Origin], symbol_table: &SymbolTable) -> Result<Vec<MachineCode>, Vec<AssemblyError>> {
     let mut machine_codes = Vec::new();
     let mut errors = Vec::new();
 
@@ -25,7 +25,7 @@ fn assemble_origins(origins: &[Origin], symbol_table: &SymbolTable) -> Result<Ve
     Ok(machine_codes)
 }
 
-fn assemble_origin(origin: &Origin, _: &SymbolTable) -> Result<MachineCode, Vec<AssemblyError>> {
+pub fn assemble_origin(origin: &Origin, _: &SymbolTable) -> Result<MachineCode, Vec<AssemblyError>> {
     let mut machine_code: Vec<u16> = Vec::new();
     let mut errors = Vec::new();
 
@@ -47,12 +47,13 @@ fn assemble_origin(origin: &Origin, _: &SymbolTable) -> Result<MachineCode, Vec<
     })
 }
 
-fn assemble_statement(statement_kind: &StatementKind, _: u16) -> Result<Vec<u16>, AssemblyError> {
+pub fn assemble_statement(statement_kind: &StatementKind, _: u16) -> Result<Vec<u16>, AssemblyError> {
     let words = match statement_kind {
         StatementKind::Add(r0,r1 ,r2 ) => vec![lc3_constants::ADD | (r0.get_u16() << 9) | r1.get_u16() << 6 | r2.get_u16()],
         StatementKind::AddI(r0,r1 ,im ) => vec![lc3_constants::ADD | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
         StatementKind::And(r0,r1 ,r2 ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | r2.get_u16()],
         StatementKind::AndI(r0,r1 ,im ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
+        StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_u16() << 9 | r1.get_u16() << 6 | (1 << 6) - 1],
     };
 
     Ok(words)
@@ -223,6 +224,28 @@ mod tests {
                     start_address: Address::new(0x3002).unwrap(),
                     code: vec![
                         0x1042, 0x5728
+                    ]
+                }
+            ]
+        )
+    }
+
+    #[test]
+    fn assembles_all_instructions() {
+        assert_eq!(
+            assemble("
+            .orig x3000
+            add r0 r1 r2
+            add r3 r4 #0
+            and r1 r2 r3
+            and r1 r2 #15
+            not r1 r2
+            .end").unwrap(),
+            vec![
+                MachineCode {
+                    start_address: Address::new(12288).unwrap(),
+                    code: vec![
+                        0x1042, 0x1720, 0x5283, 0x52AF, 0x92BF
                     ]
                 }
             ]

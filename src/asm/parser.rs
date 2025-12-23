@@ -102,7 +102,7 @@ impl<'a> Parser<'a> {
 
 
     fn consume_statement(&mut self) -> Result<Statement, ParsingError> {
-        let maybe_label = self.try_consume_label().map(|t| t.1);
+        let maybe_label = self.try_consume_label().map(|t| t.1).map(String::from);
         self.skip(LexemeKind::LineBreak);
         let instruction_lexeme = self.consume_any("instruction")?;
         match &instruction_lexeme.kind {
@@ -116,7 +116,7 @@ impl<'a> Parser<'a> {
                         Either::A(im) => StatementKind::AddI(r1, r2, im),
                         Either::B(reg) => StatementKind::Add(r1, r2, reg)
                     };
-                    Ok(Statement {kind, lexemes: self.lexemes[self.pos-4..self.pos].to_vec(), label: maybe_label.map(String::from)})
+                    Ok(Statement {kind, lexemes: self.lexemes[self.pos-4..self.pos].to_vec(), label: maybe_label})
                 },
                 InstructionSymbol::And => {
                     let r1 = self.consume_register()?;
@@ -128,8 +128,16 @@ impl<'a> Parser<'a> {
                     Ok(Statement {
                         kind,
                         lexemes: self.lexemes[self.pos-4..self.pos].to_vec(),
-                        label: maybe_label.map(String::from)})
+                        label: maybe_label})
                 },
+                InstructionSymbol::Not => {
+                    let r1 = self.consume_register()?;
+                    let r2 = self.consume_register()?;
+                    Ok(Statement {
+                        kind: StatementKind::Not(r1, r2),
+                        lexemes: self.lexemes[self.pos-3..self.pos].to_vec(), label: maybe_label
+                    })
+                }
             },
             _ => todo!()
         }
@@ -270,6 +278,7 @@ pub enum StatementKind {
     AddI(RegisterNum, RegisterNum, Imm5),
     And(RegisterNum, RegisterNum, RegisterNum),
     AndI(RegisterNum, RegisterNum, Imm5),
+    Not(RegisterNum, RegisterNum),
 
 }
 
