@@ -144,6 +144,19 @@ impl<'a> Parser<'a> {
                         lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
                         label: maybe_label })
                 }
+                symbol @ InstructionSymbol::Ld => {
+                    let r0 = self.consume_register()?;
+                    let label = self.consume_label()?;
+                    let imm9_kind = match symbol {
+                        InstructionSymbol::Ld => Imm9Kind::Ld,
+                        _ => unreachable!()
+                    };
+
+                    Ok(Statement {
+                        kind: StatementKind::Imm9MemInstruction(imm9_kind, r0, label),
+                        lexemes: self.lexemes[self.pos-3..self.pos].to_vec(),
+                        label: maybe_label })
+                }
                 InstructionSymbol::Not => {
                     let r1 = self.consume_register()?;
                     let r2 = self.consume_register()?;
@@ -200,6 +213,16 @@ impl<'a> Parser<'a> {
             Ok(value)
         } else {
             Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), register_lexeme.kind.string_name())))
+        }
+    }
+
+    fn consume_label(&mut self) -> Result<String, ParsingError> {
+        let register_lexeme=  self.curr_lexeme_or_error("label")?;
+        if let LexemeKind::Label(label) = &register_lexeme.kind {
+            self.advance();
+            Ok(label.clone())
+        } else {
+            Err(self.make_error(ParsingErrorKind::ExpectedButFound("label".to_string(), register_lexeme.kind.string_name())))
         }
     }
 
@@ -314,11 +337,22 @@ pub enum StatementKind {
     AndI(RegisterNum, RegisterNum, Imm5),
     Jmp(RegisterNum),
     Jsrr(RegisterNum),
+    Imm9MemInstruction(Imm9Kind, RegisterNum, String),
     Not(RegisterNum, RegisterNum),
     Rti,
     Trap(TrapVec),
 
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Imm9Kind {
+    Ld,
+    // Ldi,
+    // Lea,
+    // St,
+    // Sti,
+}
+
 
 trait StatementArgument {
     fn string_name(&self) -> String;

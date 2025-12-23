@@ -1,6 +1,6 @@
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt::{self, write}};
 
-use crate::asm::{parser::{Origin, StatementKind, parse}, types::Address};
+use crate::asm::{parser::{Imm9Kind, Origin, StatementKind, parse}, types::{Address, NBitInt}};
 use crate::lc3_constants;
 
 
@@ -25,7 +25,7 @@ pub fn assemble_origins(origins: &[Origin], symbol_table: &SymbolTable) -> Resul
     Ok(machine_codes)
 }
 
-pub fn assemble_origin(origin: &Origin, _: &SymbolTable) -> Result<MachineCode, Vec<AssemblyError>> {
+pub fn assemble_origin(origin: &Origin, symbol_table: &SymbolTable) -> Result<MachineCode, Vec<AssemblyError>> {
     let mut machine_code: Vec<u16> = Vec::new();
     let mut errors = Vec::new();
 
@@ -33,7 +33,7 @@ pub fn assemble_origin(origin: &Origin, _: &SymbolTable) -> Result<MachineCode, 
     for statement in &origin.statements {
         pc += get_statement_size(&statement.kind);
 
-        match assemble_statement(&statement.kind, pc) {
+        match assemble_statement(&statement.kind, pc, symbol_table) {
             Err(e) => errors.push(e),
             Ok(assembled_statement) if errors.len() == 0 => machine_code.extend(assembled_statement),
             _ => {} // Stop writing machine code if there has been an error
@@ -47,7 +47,7 @@ pub fn assemble_origin(origin: &Origin, _: &SymbolTable) -> Result<MachineCode, 
     })
 }
 
-pub fn assemble_statement(statement_kind: &StatementKind, _: u16) -> Result<Vec<u16>, AssemblyError> {
+pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table: &SymbolTable) -> Result<Vec<u16>, AssemblyError> {
     let words = match statement_kind {
         StatementKind::Add(r0,r1 ,r2 ) => vec![lc3_constants::ADD | (r0.get_u16() << 9) | r1.get_u16() << 6 | r2.get_u16()],
         StatementKind::AddI(r0,r1 ,im ) => vec![lc3_constants::ADD | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
@@ -55,6 +55,14 @@ pub fn assemble_statement(statement_kind: &StatementKind, _: u16) -> Result<Vec<
         StatementKind::AndI(r0,r1 ,im ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
         StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_u16() << 6],
         StatementKind::Jsrr(r0) => vec![lc3_constants::JSR | r0.get_u16() << 6],
+        StatementKind::Imm9MemInstruction(kind, r0, label) => {
+            let instruction= match kind {
+                Imm9Kind::Ld => lc3_constants::LD,
+            };
+            let signed_offset = symbol_table.get(label)? as i32 - pc as i32;
+            let _ = NBitInt::<9, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(label.clone(), signed_offset, 9))?;
+            vec![instruction | r0.get_u16() << 9 | signed_offset as u16 & 0x1FF]
+        }
         StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_u16() << 9 | r1.get_u16() << 6 | (1 << 6) - 1],
         StatementKind::Rti => vec![lc3_constants::RTI],
         StatementKind::Trap(trap_vec) => vec![lc3_constants::TRAP | trap_vec.get_u16()]
@@ -90,7 +98,7 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
     let mut errors = Vec::new();
     for origin in origins {
         if let Some(label) = &origin.label {
-            if let Err(ae) = table.add(&label, origin.start_address) {
+            if let Err(ae) = table.add(&label, origin.start_address.get_u16()) {
                 errors.push(ae);
             }
         }
@@ -102,7 +110,7 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
                 errors.push(ae);
             }
             if let Some(label) = &statement.label {
-                if let Err(ae) = table.add(label, pc) {
+                if let Err(ae) = table.add(label, pc.get_u16()) {
                     errors.push(ae);
                 }
             }
@@ -120,14 +128,14 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
 
 #[derive(Debug)]
 pub struct SymbolTable {
-    lookup: HashMap<String, Address>
+    lookup: HashMap<String, u16>
 }
 
 impl<'a> SymbolTable {
     pub fn new() -> SymbolTable {
         SymbolTable { lookup: HashMap::new() }
     }
-    pub fn add(&mut self, symbol: &str, address: Address) -> Result<(), AssemblyError> {
+    pub fn add(&mut self, symbol: &str, address: u16) -> Result<(), AssemblyError> {
         if self.lookup.contains_key(symbol) {
             Err(AssemblyError::DoubleDefinedSymbol(symbol.to_string()))
         } else {
@@ -135,7 +143,7 @@ impl<'a> SymbolTable {
             Ok(())
         }
     }
-    pub fn get(&self, symbol: &str) -> Result<Address, AssemblyError> {
+    pub fn get(&self, symbol: &str) -> Result<u16, AssemblyError> {
         if let Some(address) = self.lookup.get(symbol) {
             Ok(*address)
         } else {
@@ -153,6 +161,7 @@ pub enum AssemblyError {
     DoubleDefinedSymbol(String),
     UndefinedSymbol(String),
     LabelOutOfRange(i32),
+    OffsetOutOfRange(String, i32, u8),
 }
 
 impl fmt::Display for AssemblyError {
@@ -160,7 +169,8 @@ impl fmt::Display for AssemblyError {
         match self {
             Self::DoubleDefinedSymbol(sym) => write!(f, "the label \"{}\" has been defined more than once", sym),
             Self::UndefinedSymbol(sym) => write!(f, "the label \"{}\" has no definition", sym),
-            Self::LabelOutOfRange(address) => write!(f, "the label stands in for address \"{:x}\", which is out of range for the LC-3", address)
+            Self::LabelOutOfRange(address) => write!(f, "the label stands in for address \"{:x}\", which is out of range for the LC-3", address),
+            Self::OffsetOutOfRange(label, offset, bits) => write!(f, "\"{label}\" stands for an address that is at an offset of {offset:x}, which is too high in magnitude for a {bits}-bit number.")
         }
     }
 }
@@ -190,10 +200,10 @@ mod tests {
         assert_eq!(
             labels_and_addresses,
             vec![
-                ("l1", Address::new(300).unwrap()),
-                ("l2", Address::new(300).unwrap()),
-                ("l3", Address::new(301).unwrap()),
-                ("l4", Address::new(302).unwrap()),
+                ("l1", 300),
+                ("l2", 300),
+                ("l3", 301),
+                ("l4", 302),
                 ]
         );
     }
@@ -245,10 +255,11 @@ mod tests {
             and r1 r2 #15
             jmp r6
             jsrr r5
+            ld r2 label
             not r1 r2
             ret
             rti
-            trap x18
+            label trap x18
             .end").unwrap(),
             vec![
                 MachineCode {
@@ -260,6 +271,7 @@ mod tests {
                         0x52AF, // and
                         0xC180, // jmp
                         0x4140, // jsrr
+                        0x2403, // ld
                         0x92BF, // not
                         0xC1C0, // ret
                         0x8000, // rti
