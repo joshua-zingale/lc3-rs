@@ -1,6 +1,6 @@
 use std::vec;
 
-use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum}};
+use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
 
 pub fn parse(source: &str) -> Result<Vec<Origin>, Vec<ParsingError>> {
     let lexemes = lex(source);
@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
                 InstructionSymbol::Add => {
                     let r1 = self.consume_register()?;
                     let r2= self.consume_register()?;
-                    let kind =  match self.consume_immediate_or_register::<5, true>()? {
+                    let kind =  match self.consume_immediate_or_register()? {
                         Either::A(im) => StatementKind::AddI(r1, r2, im),
                         Either::B(reg) => StatementKind::Add(r1, r2, reg)
                     };
@@ -121,7 +121,7 @@ impl<'a> Parser<'a> {
                 InstructionSymbol::And => {
                     let r1 = self.consume_register()?;
                     let r2= self.consume_register()?;
-                    let kind =  match self.consume_immediate_or_register::<5, true>()? {
+                    let kind =  match self.consume_immediate_or_register()? {
                         Either::A(im) => StatementKind::AndI(r1, r2, im),
                         Either::B(reg) => StatementKind::And(r1, r2, reg)
                     };
@@ -162,6 +162,14 @@ impl<'a> Parser<'a> {
                     Ok(Statement {
                         kind: StatementKind::Rti,
                         lexemes: self.lexemes[self.pos-1..self.pos].to_vec(), label: maybe_label
+                    })
+                },
+                InstructionSymbol::Trap => {
+                    let (_, trap_vec) = self.consume_immediate()?;
+                    Ok(Statement {
+                        kind: StatementKind::Trap(trap_vec),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label
                     })
                 }
             },
@@ -308,6 +316,7 @@ pub enum StatementKind {
     Jsrr(RegisterNum),
     Not(RegisterNum, RegisterNum),
     Rti,
+    Trap(TrapVec),
 
 }
 

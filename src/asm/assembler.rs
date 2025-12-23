@@ -56,7 +56,8 @@ pub fn assemble_statement(statement_kind: &StatementKind, _: u16) -> Result<Vec<
         StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_u16() << 6],
         StatementKind::Jsrr(r0) => vec![lc3_constants::JSR | r0.get_u16() << 6],
         StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_u16() << 9 | r1.get_u16() << 6 | (1 << 6) - 1],
-        StatementKind::Rti => vec![lc3_constants::RTI]
+        StatementKind::Rti => vec![lc3_constants::RTI],
+        StatementKind::Trap(trap_vec) => vec![lc3_constants::TRAP | trap_vec.get_u16()]
     };
 
     Ok(words)
@@ -247,6 +248,7 @@ mod tests {
             not r1 r2
             ret
             rti
+            trap x18
             .end").unwrap(),
             vec![
                 MachineCode {
@@ -260,7 +262,8 @@ mod tests {
                         0x4140, // jsrr
                         0x92BF, // not
                         0xC1C0, // ret
-                        0x8000 // rti
+                        0x8000, // rti
+                        0xF018, // trap
                     ]
                 }
             ]

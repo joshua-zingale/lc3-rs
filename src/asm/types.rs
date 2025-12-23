@@ -136,6 +136,8 @@ impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
 
 pub type Imm5 = NBitInt<5, true>;
 
+pub type TrapVec = NBitInt<8, false>;
+
 pub type RegisterNum = NBitInt<3, false>;
 
 pub type Address = NBitInt<16, false>;
