@@ -240,6 +240,7 @@ mod tests {
             add r3 r4 #0
             and r1 r2 r3
             and r1 r2 #15
+            jmp r6
             not r1 r2
             ret
             .end").unwrap(),
@@ -247,7 +248,7 @@ mod tests {
                 MachineCode {
                     start_address: Address::new(12288).unwrap(),
                     code: vec![
-                        0x1042, 0x1720, 0x5283, 0x52AF, 0x92BF, 0xC1C0
+                        0x1042, 0x1720, 0x5283, 0x52AF, 0xC180, 0x92BF, 0xC1C0
                     ]
                 }
             ]

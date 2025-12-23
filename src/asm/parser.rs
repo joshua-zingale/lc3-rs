@@ -130,6 +130,13 @@ impl<'a> Parser<'a> {
                         lexemes: self.lexemes[self.pos-4..self.pos].to_vec(),
                         label: maybe_label})
                 },
+                InstructionSymbol::Jmp => {
+                    let r1 = self.consume_register()?;
+                    Ok(Statement {
+                        kind: StatementKind::Jmp(r1),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label })
+                }
                 InstructionSymbol::Not => {
                     let r1 = self.consume_register()?;
                     let r2 = self.consume_register()?;
