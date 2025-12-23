@@ -137,6 +137,13 @@ impl<'a> Parser<'a> {
                         lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
                         label: maybe_label })
                 }
+                InstructionSymbol::Jsrr => {
+                    let r1 = self.consume_register()?;
+                    Ok(Statement {
+                        kind: StatementKind::Jsrr(r1),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label })
+                }
                 InstructionSymbol::Not => {
                     let r1 = self.consume_register()?;
                     let r2 = self.consume_register()?;
@@ -291,8 +298,9 @@ pub enum StatementKind {
     AddI(RegisterNum, RegisterNum, Imm5),
     And(RegisterNum, RegisterNum, RegisterNum),
     AndI(RegisterNum, RegisterNum, Imm5),
-    Not(RegisterNum, RegisterNum),
     Jmp(RegisterNum),
+    Jsrr(RegisterNum),
+    Not(RegisterNum, RegisterNum),
 
 }
 

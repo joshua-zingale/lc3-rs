@@ -53,8 +53,9 @@ pub fn assemble_statement(statement_kind: &StatementKind, _: u16) -> Result<Vec<
         StatementKind::AddI(r0,r1 ,im ) => vec![lc3_constants::ADD | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
         StatementKind::And(r0,r1 ,r2 ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | r2.get_u16()],
         StatementKind::AndI(r0,r1 ,im ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
-        StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_u16() << 9 | r1.get_u16() << 6 | (1 << 6) - 1],
         StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_u16() << 6],
+        StatementKind::Jsrr(r0) => vec![lc3_constants::JSR | r0.get_u16() << 6],
+        StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_u16() << 9 | r1.get_u16() << 6 | (1 << 6) - 1],
     };
 
     Ok(words)
@@ -241,6 +242,7 @@ mod tests {
             and r1 r2 r3
             and r1 r2 #15
             jmp r6
+            jsrr r5
             not r1 r2
             ret
             .end").unwrap(),
@@ -248,7 +250,7 @@ mod tests {
                 MachineCode {
                     start_address: Address::new(12288).unwrap(),
                     code: vec![
-                        0x1042, 0x1720, 0x5283, 0x52AF, 0xC180, 0x92BF, 0xC1C0
+                        0x1042, 0x1720, 0x5283, 0x52AF, 0xC180, 0x4140, 0x92BF, 0xC1C0
                     ]
                 }
             ]
