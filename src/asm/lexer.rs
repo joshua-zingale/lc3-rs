@@ -148,6 +148,7 @@ impl<'a> Iterator for Lexer<'a> {
                     "add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
                     "and" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::And))),
                     "jmp" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jmp))),
+                    "jsr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jsr))),
                     "jsrr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jsrr))),
                     "ld" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ld))),
                     "ldi" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ldi))),
@@ -225,7 +226,7 @@ pub enum InstructionSymbol {
     And,
     // Br,
     Jmp,
-    // Jsr,
+    Jsr,
     Jsrr,
     Ld,
     Ldi,
@@ -275,7 +276,7 @@ mod tests {
     fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind("add AdD and aND jmp JmP jsrr JSRR ld Ld ldi lDI lea LEa not Not ret rEt rti RTI st ST sti sTi"),
+            lex_unwrap_kind("add AdD and aND jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI lea LEa not Not ret rEt rti RTI st ST sti sTi"),
             vec![
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(Add),
@@ -283,6 +284,8 @@ mod tests {
                 LexemeKind::Instruction(And),
                 LexemeKind::Instruction(Jmp),
                 LexemeKind::Instruction(Jmp),
+                LexemeKind::Instruction(Jsr),
+                LexemeKind::Instruction(Jsr),
                 LexemeKind::Instruction(Jsrr),
                 LexemeKind::Instruction(Jsrr),
                 LexemeKind::Instruction(Ld),

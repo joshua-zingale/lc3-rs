@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::{self, write}};
 
-use crate::asm::{parser::{Imm9Kind, Origin, StatementKind, parse}, types::{Address, NBitInt}};
+use crate::asm::{parser::{Imm9Kind, Origin, StatementKind, parse}, types::{Address, Either, NBitInt}};
 use crate::lc3_constants;
 
 
@@ -54,6 +54,17 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
         StatementKind::And(r0,r1 ,r2 ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | r2.get_u16()],
         StatementKind::AndI(r0,r1 ,im ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
         StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_u16() << 6],
+        StatementKind::Jsr(either_offset) => {
+            let offset = match either_offset {
+                Either::A(immediate) => immediate.get_u16(),
+                Either::B(label) => {
+                    let signed_offset = symbol_table.get(label)? as i32 - pc as i32;
+                    let _ = NBitInt::<11, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(label.clone(), e.attempted_num, e.bits as u8))?;
+                    signed_offset as u16 & 0x7FF
+                },
+            };
+            vec![lc3_constants::JSR | 1 << 11 | offset]
+        },
         StatementKind::Jsrr(r0) => vec![lc3_constants::JSR | r0.get_u16() << 6],
         StatementKind::Imm9MemInstruction(kind, r0, label) => {
             let instruction= match kind {
@@ -64,7 +75,7 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
                 Imm9Kind::Sti => lc3_constants::STI,
             };
             let signed_offset = symbol_table.get(label)? as i32 - pc as i32;
-            let _ = NBitInt::<9, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(label.clone(), signed_offset, 9))?;
+            let _ = NBitInt::<9, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(label.clone(), e.attempted_num, e.bits as u8))?;
             vec![instruction | r0.get_u16() << 9 | signed_offset as u16 & 0x1FF]
         }
         StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_u16() << 9 | r1.get_u16() << 6 | (1 << 6) - 1],
@@ -258,6 +269,7 @@ mod tests {
             and r1 r2 r3
             label and r1 r2 #15
             jmp r6
+            jsr label
             jsrr r5
             ld r2 label
             ldi r3 label
@@ -278,15 +290,16 @@ mod tests {
                         0x5283, // and
                         0x52AF, // and
                         0xC180, // jmp
+                        0x4FFD, // jsr
                         0x4140, // jsrr
-                        0x25FC, // ld
-                        0xA7FB, // ldi
-                        0xE9FA, // lea
+                        0x25FB, // ld
+                        0xA7FA, // ldi
+                        0xE9F9, // lea
                         0x92BF, // not
                         0xC1C0, // ret
                         0x8000, // rti
-                        0x3BF6, // st
-                        0xBBF5, // sti
+                        0x3BF5, // st
+                        0xBBF4, // sti
                         0xF018, // trap
                     ]
                 }

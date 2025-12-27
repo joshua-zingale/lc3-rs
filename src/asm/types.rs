@@ -135,13 +135,16 @@ impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
 
 
 pub type Imm5 = NBitInt<5, true>;
+pub type Imm11 = NBitInt<11, true>;
 
 pub type TrapVec = NBitInt<8, false>;
 
 pub type RegisterNum = NBitInt<3, false>;
 
+
 pub type Address = NBitInt<16, false>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Either<A, B> {
     A(A),
     B(B),

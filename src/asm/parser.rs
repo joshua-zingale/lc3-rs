@@ -1,6 +1,6 @@
 use std::vec;
 
-use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
+use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
 
 pub fn parse(source: &str) -> Result<Vec<Origin>, Vec<ParsingError>> {
     let lexemes = lex(source);
@@ -137,6 +137,13 @@ impl<'a> Parser<'a> {
                         lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
                         label: maybe_label })
                 }
+                InstructionSymbol::Jsr => {
+                    let offset = self.consume_immediate_or_label::<11, true>()?;
+                    Ok(Statement {
+                        kind: StatementKind::Jsr(offset),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label })
+                }
                 InstructionSymbol::Jsrr => {
                     let r1 = self.consume_register()?;
                     Ok(Statement {
@@ -231,7 +238,7 @@ impl<'a> Parser<'a> {
     }
 
     fn consume_immediate_or_register<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<Either<NBitInt<BITS, SIGNED>, RegisterNum>, ParsingError> {
-        let lexeme=  self.curr_lexeme_or_error("immediate value")?;
+        let lexeme=  self.curr_lexeme_or_error("immediate value or register")?;
         if let LexemeKind::Immediate(value)  = lexeme.kind {
             self.advance();
             let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
@@ -241,6 +248,20 @@ impl<'a> Parser<'a> {
             Ok(Either::B(value))
         } else {
             Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value or register".to_string(), lexeme.kind.string_name())))
+        }
+    }
+
+    fn consume_immediate_or_label<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<Either<NBitInt<BITS, SIGNED>, String>, ParsingError> {
+        let lexeme=  self.curr_lexeme_or_error("immediate value or label")?;
+        if let LexemeKind::Immediate(value)  = lexeme.kind {
+            self.advance();
+            let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
+            Ok(Either::A( n_bit_int))
+        } else if let LexemeKind::Label(value) = &lexeme.kind {
+            self.advance();
+            Ok(Either::B(value.clone()))
+        } else {
+            Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value or label".to_string(), lexeme.kind.string_name())))
         }
     }
 
@@ -340,6 +361,7 @@ pub enum StatementKind {
     And(RegisterNum, RegisterNum, RegisterNum),
     AndI(RegisterNum, RegisterNum, Imm5),
     Jmp(RegisterNum),
+    Jsr(Either<Imm11, String>),
     Jsrr(RegisterNum),
     Imm9MemInstruction(Imm9Kind, RegisterNum, String),
     Not(RegisterNum, RegisterNum),
