@@ -276,7 +276,7 @@ mod tests {
     fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind("add AdD and aND jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI lea LEa not Not ret rEt rti RTI st ST sti sTi"),
+            lex_unwrap_kind("add AdD and aND jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI lea LEa not Not ret rEt rti RTI st ST sti sTi trap TrAp"),
             vec![
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(Add),
@@ -303,7 +303,9 @@ mod tests {
                 LexemeKind::Instruction(St),
                 LexemeKind::Instruction(St),
                 LexemeKind::Instruction(Sti),
-                LexemeKind::Instruction(Sti),]
+                LexemeKind::Instruction(Sti),
+                LexemeKind::Instruction(Trap),
+                LexemeKind::Instruction(Trap),]
         )
     }
     #[test]
