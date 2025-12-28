@@ -81,10 +81,6 @@ fn skippable(char: char) -> bool {
     return char == ' ' || char == '\t' || char == '\r' || char == ','
 }
 
-fn lowercase(chars: &[u8]) -> Vec<u8> {
-    chars.iter().map(|c| c.bitor(0x20)).collect()
-}
-
 impl<'a> Iterator for Lexer<'a> {
     type Item = Result<Lexeme, ParsingError>;
 
