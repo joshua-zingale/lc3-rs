@@ -1,6 +1,4 @@
 
-use std::ops::{BitOr};
-
 use crate::asm::types::{Location, ParsingError, ParsingErrorKind, RegisterNum};
 
 pub fn lex(source: &str) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>>> {
