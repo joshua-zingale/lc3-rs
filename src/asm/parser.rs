@@ -124,6 +124,18 @@ impl<'a> Parser<'a> {
                         lexemes: self.lexemes[self.pos-4..self.pos].to_vec(),
                         label: maybe_label})
                 },
+                InstructionSymbol::Br(n, z, p) => {
+                    let (n2, z2, p2) = if *n || *z || *p {
+                        (*n,*z,*p)
+                    } else {
+                        (true, true, true)
+                    };
+                    let offset = self.consume_immediate_or_label()?;
+                    Ok(Statement {
+                        kind: StatementKind::Br(n2, z2, p2, offset),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label })
+                }
                 InstructionSymbol::Jmp => {
                     let r1 = self.consume_register()?;
                     Ok(Statement {
@@ -365,6 +377,7 @@ pub struct Statement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatementKind {
     AddAnd(AddAndKind, RegisterNum, RegisterNum, Either<Imm5, RegisterNum>),
+    Br(bool, bool, bool, Either<Imm9, String>),
     MemRelative(MemRelativeKind, RegisterNum, RegisterNum, Imm6),
     Jmp(RegisterNum),
     Jsr(Either<Imm11, String>),

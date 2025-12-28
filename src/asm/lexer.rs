@@ -164,7 +164,21 @@ impl<'a> Iterator for Lexer<'a> {
                         && (
                             ('a'..='z').contains(&first_char)
                             || ('A'..='Z').contains(&first_char))) => Err(self.make_error(ParsingErrorKind::InvalidCharacterInLabel)),
-                    lowercase_slice => Ok(self.make_lexeme(LexemeKind::Label(lowercase_slice.to_string())))
+                    lowercase_slice => {
+                        let mut chars = lowercase_slice.chars().peekable();
+                        if Some('b') == chars.next() && Some('r') == chars.next() {
+                            let n = None != chars.next_if(|&e| e == 'n');
+                            let z = None != chars.next_if(|&e| e == 'z');
+                            let p = None != chars.next_if(|&e| e == 'p');
+
+                            if None == chars.next() {
+                                return Some(Ok(
+                                    self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Br(n,z,p)))
+                                ))
+                            }
+                        }
+                        Ok(self.make_lexeme(LexemeKind::Label(lowercase_slice.to_string())))
+                    }
                 }
             }
         })
@@ -220,7 +234,7 @@ pub enum DirectiveSymbol {
 pub enum InstructionSymbol {
     Add,
     And,
-    // Br,
+    Br(bool, bool, bool),
     Jmp,
     Jsr,
     Jsrr,
@@ -272,12 +286,20 @@ mod tests {
     fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind("add AdD and aND jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI ldr LDR lea LEa not Not ret rEt rti RTI st ST sti sTi str stR trap TrAp"),
+            lex_unwrap_kind("add AdD and aND br brn brz brnz brp brnp brzp brnzp jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI ldr LDR lea LEa not Not ret rEt rti RTI st ST sti sTi str stR trap TrAp"),
             vec![
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(And),
                 LexemeKind::Instruction(And),
+                LexemeKind::Instruction(Br(false, false, false)),
+                LexemeKind::Instruction(Br(true, false, false)),
+                LexemeKind::Instruction(Br(false, true, false)),
+                LexemeKind::Instruction(Br(true, true, false)),
+                LexemeKind::Instruction(Br(false, false, true)),
+                LexemeKind::Instruction(Br(true, false, true)),
+                LexemeKind::Instruction(Br(false, true, true)),
+                LexemeKind::Instruction(Br(true, true, true)),
                 LexemeKind::Instruction(Jmp),
                 LexemeKind::Instruction(Jmp),
                 LexemeKind::Instruction(Jsr),

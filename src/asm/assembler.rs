@@ -60,6 +60,10 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
             };
             vec![instruction | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | termination]
         },
+        StatementKind::Br(n, z, p, offset_or_symbol) => {
+            let offset = symbol_table.get_or_give_offset(pc, offset_or_symbol)?;
+            vec![lc3_constants::BR | (*n as u16) << 11 | (*z as u16) << 10 | (*p as u16) << 9 | offset]
+        }
         StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_truncated_u16() << 6],
         StatementKind::Jsr(offset) => {
             vec![lc3_constants::JSR | 1 << 11 | symbol_table.get_or_give_offset::<11>(pc, offset)?]
@@ -311,6 +315,38 @@ mod tests {
     }
 
     #[test]
+    fn assembles_all_branch_instruction_possibilities() {
+        assert_eq!(
+            assemble("
+            .orig x3000
+            br #-1
+            brn #-1
+            brz #-1
+            brnz #-1
+            brp #-1
+            brnp #-1
+            brzp #-1
+            brnzp #-1
+            .end").unwrap(),
+            vec![
+                MachineCode {
+                    start_address: Address::new(0x3000).unwrap(),
+                    code: vec![
+                        0x0FFF,
+                        0x09FF,
+                        0x05FF,
+                        0x0DFF,
+                        0x03FF,
+                        0x0BFF,
+                        0x07FF,
+                        0x0FFF,
+                    ]
+                }
+            ]
+        )
+    }
+
+    #[test]
     fn assembles_all_instructions() {
         assert_eq!(
             assemble("
@@ -319,6 +355,8 @@ mod tests {
             add r3 r4 #0
             and r1 r2 r3
             label and r1 r2 #15
+            brnp label
+            brz x87
             jmp r6
             jsr label
             jsrr r5
@@ -342,18 +380,20 @@ mod tests {
                         0x1720, // add
                         0x5283, // and
                         0x52AF, // and
+                        0x0BFE, // brnp
+                        0x0487, // brz
                         0xC180, // jmp
-                        0x4FFD, // jsr
+                        0x4FFB, // jsr
                         0x4140, // jsrr
-                        0x25FB, // ld
-                        0xA7FA, // ldi
+                        0x25F9, // ld
+                        0xA7F8, // ldi
                         0x6288, // ldr
-                        0xE9F8, // lea
+                        0xE9F6, // lea
                         0x92BF, // not
                         0xC1C0, // ret
                         0x8000, // rti
-                        0x3BF4, // st
-                        0xBBF3, // sti
+                        0x3BF2, // st
+                        0xBBF1, // sti
                         0x7E20, // str
                         0xF018, // trap
                     ]
