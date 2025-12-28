@@ -371,6 +371,12 @@ mod tests {
             sti r5 label
             str r7 r0 #-32
             trap x18
+            getc
+            out
+            puts
+            in
+            putsp
+            halt
             .end").unwrap(),
             vec![
                 MachineCode {
@@ -396,6 +402,12 @@ mod tests {
                         0xBBF1, // sti
                         0x7E20, // str
                         0xF018, // trap
+                        0xF020, // getc
+                        0xF021, // out
+                        0xF022, // puts
+                        0xF023, // in
+                        0xF024, // putsp
+                        0xF025, // halt
                     ]
                 }
             ]

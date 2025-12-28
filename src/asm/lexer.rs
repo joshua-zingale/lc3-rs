@@ -155,6 +155,12 @@ impl<'a> Iterator for Lexer<'a> {
                     "sti" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Sti))),
                     "str" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Str))),
                     "trap" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Trap))),
+                    "getc" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Getc))),
+                    "out" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Out))),
+                    "puts" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Puts))),
+                    "in" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::In))),
+                    "putsp" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Putsp))),
+                    "halt" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Halt))),
                     _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
                     slice if !(
                         slice.chars().all(|c|
@@ -249,8 +255,12 @@ pub enum InstructionSymbol {
     Sti,
     Str,
     Trap,
-    // Out,
-    // Puts,
+    Getc,
+    Out,
+    Puts,
+    In,
+    Putsp,
+    Halt,
 }
 
 
@@ -279,6 +289,28 @@ mod tests {
                 LexemeKind::Directive(DirectiveSymbol::Orig),
                 LexemeKind::Directive(DirectiveSymbol::End)
             ]
+        )
+    }
+
+    #[test]
+    fn trap_aliases() {
+        use InstructionSymbol::*;
+        assert_eq!(
+            lex_unwrap_kind("getc GETC out OuT puts PuTs in In putsp pUTSp halt Halt"),
+            vec![
+                LexemeKind::Instruction(Getc),
+                LexemeKind::Instruction(Getc),
+                LexemeKind::Instruction(Out),
+                LexemeKind::Instruction(Out),
+                LexemeKind::Instruction(Puts),
+                LexemeKind::Instruction(Puts),
+                LexemeKind::Instruction(In),
+                LexemeKind::Instruction(In),
+                LexemeKind::Instruction(Putsp),
+                LexemeKind::Instruction(Putsp),
+                LexemeKind::Instruction(Halt),
+                LexemeKind::Instruction(Halt),
+                ]
         )
     }
 

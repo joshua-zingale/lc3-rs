@@ -1,6 +1,6 @@
-use std::vec;
+use std::{string::ParseError, vec};
 
-use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm6, Imm9, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
+use crate::asm::{assembler::AssemblyError, lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm6, Imm9, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
 
 pub fn parse(source: &str) -> Result<Vec<Origin>, Vec<ParsingError>> {
     let lexemes = lex(source);
@@ -210,6 +210,23 @@ impl<'a> Parser<'a> {
                 },
                 InstructionSymbol::Trap => {
                     let (_, trap_vec) = self.consume_immediate()?;
+                    Ok(Statement {
+                        kind: StatementKind::Trap(trap_vec),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label
+                    })
+                },
+                s @ (InstructionSymbol::Getc | InstructionSymbol::Out | InstructionSymbol::Puts | InstructionSymbol::In | InstructionSymbol::Putsp | InstructionSymbol::Halt) => {
+                    let trap_vec = TrapVec::new(match s {
+                        InstructionSymbol::Getc => 0x20,
+                        InstructionSymbol::Out => 0x21,
+                        InstructionSymbol::Puts => 0x22,
+                        InstructionSymbol::In => 0x23,
+                        InstructionSymbol::Putsp => 0x24,
+                        InstructionSymbol::Halt => 0x25,
+                        _ => unreachable!(),
+                    }).expect("all TRAP aliases map to valid trap vectors");
+
                     Ok(Statement {
                         kind: StatementKind::Trap(trap_vec),
                         lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
