@@ -29,7 +29,7 @@ pub fn assemble_origin(origin: &Origin, symbol_table: &SymbolTable) -> Result<Ma
     let mut machine_code: Vec<u16> = Vec::new();
     let mut errors = Vec::new();
 
-    let mut pc = origin.start_address.get_u16();
+    let mut pc = origin.start_address.get_truncated_u16();
     for statement in &origin.statements {
         pc += get_statement_size(&statement.kind);
 
@@ -49,23 +49,21 @@ pub fn assemble_origin(origin: &Origin, symbol_table: &SymbolTable) -> Result<Ma
 
 pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table: &SymbolTable) -> Result<Vec<u16>, AssemblyError> {
     let words = match statement_kind {
-        StatementKind::Add(r0,r1 ,r2 ) => vec![lc3_constants::ADD | (r0.get_u16() << 9) | r1.get_u16() << 6 | r2.get_u16()],
-        StatementKind::AddI(r0,r1 ,im ) => vec![lc3_constants::ADD | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
-        StatementKind::And(r0,r1 ,r2 ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | r2.get_u16()],
-        StatementKind::AndI(r0,r1 ,im ) => vec![lc3_constants::AND | (r0.get_u16() << 9) | r1.get_u16() << 6 | 1 << 5 | im.get_u16()],
-        StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_u16() << 6],
+        StatementKind::Add(r0,r1 ,r2 ) => vec![lc3_constants::ADD | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | r2.get_truncated_u16()],
+        StatementKind::AddI(r0,r1 ,im ) => vec![lc3_constants::ADD | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | 1 << 5 | im.get_truncated_u16()],
+        StatementKind::And(r0,r1 ,r2 ) => vec![lc3_constants::AND | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | r2.get_truncated_u16()],
+        StatementKind::AndI(r0,r1 ,im ) => vec![lc3_constants::AND | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | 1 << 5 | im.get_truncated_u16()],
+        StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_truncated_u16() << 6],
         StatementKind::Jsr(either_offset) => {
             let offset = match either_offset {
-                Either::A(immediate) => immediate.get_u16(),
-                Either::B(label) => {
-                    let signed_offset = symbol_table.get(label)? as i32 - pc as i32;
-                    let _ = NBitInt::<11, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(label.clone(), e.attempted_num, e.bits as u8))?;
-                    signed_offset as u16 & 0x7FF
+                Either::A(immediate) => immediate.get_truncated_u16(),
+                Either::B(symbol) => {
+                    symbol_table.get_offset::<11>(pc, symbol)?
                 },
             };
             vec![lc3_constants::JSR | 1 << 11 | offset]
         },
-        StatementKind::Jsrr(r0) => vec![lc3_constants::JSR | r0.get_u16() << 6],
+        StatementKind::Jsrr(r0) => vec![lc3_constants::JSR | r0.get_truncated_u16() << 6],
         StatementKind::Imm9MemInstruction(kind, r0, label) => {
             let instruction= match kind {
                 Imm9Kind::Ld => lc3_constants::LD,
@@ -74,13 +72,12 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
                 Imm9Kind::St => lc3_constants::ST,
                 Imm9Kind::Sti => lc3_constants::STI,
             };
-            let signed_offset = symbol_table.get(label)? as i32 - pc as i32;
-            let _ = NBitInt::<9, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(label.clone(), e.attempted_num, e.bits as u8))?;
-            vec![instruction | r0.get_u16() << 9 | signed_offset as u16 & 0x1FF]
+
+            vec![instruction | r0.get_truncated_u16() << 9 | symbol_table.get_offset::<9>(pc, label)?]
         }
-        StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_u16() << 9 | r1.get_u16() << 6 | (1 << 6) - 1],
+        StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_truncated_u16() << 9 | r1.get_truncated_u16() << 6 | (1 << 6) - 1],
         StatementKind::Rti => vec![lc3_constants::RTI],
-        StatementKind::Trap(trap_vec) => vec![lc3_constants::TRAP | trap_vec.get_u16()]
+        StatementKind::Trap(trap_vec) => vec![lc3_constants::TRAP | trap_vec.get_truncated_u16()]
     };
 
     Ok(words)
@@ -113,7 +110,7 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
     let mut errors = Vec::new();
     for origin in origins {
         if let Some(label) = &origin.label {
-            if let Err(ae) = table.add(&label, origin.start_address.get_u16()) {
+            if let Err(ae) = table.add(&label, origin.start_address.get_truncated_u16()) {
                 errors.push(ae);
             }
         }
@@ -125,7 +122,7 @@ fn get_symbol_table(origins: &[Origin]) -> Result<SymbolTable, (SymbolTable, Vec
                 errors.push(ae);
             }
             if let Some(label) = &statement.label {
-                if let Err(ae) = table.add(label, pc.get_u16()) {
+                if let Err(ae) = table.add(label, pc.get_truncated_u16()) {
                     errors.push(ae);
                 }
             }
@@ -168,6 +165,12 @@ impl<'a> SymbolTable {
 
     pub fn labels(&'a self) -> Vec<&'a str> {
         self.lookup.keys().map(|x| x.as_str()).collect()
+    }
+
+    pub fn get_offset<const BITS: u32>(&self, pc: u16, symbol: &str) -> Result<u16, AssemblyError> {
+        let signed_offset = self.get(symbol)? as i32 - pc as i32;
+        let n_bit_number = NBitInt::<BITS, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(symbol.to_string(), e.attempted_num, e.bits as u8))?;
+        Ok(n_bit_number.get_truncated_u16())
     }
 }
 

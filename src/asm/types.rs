@@ -118,9 +118,11 @@ impl<const BITS: u32, const SIGNED: bool> NBitInt<BITS, SIGNED> {
         Ok(self.0 = Self::new(self.get() + v)?.get())
     }
 
-    pub fn get_u16(&self) -> u16 {
+    // Returns the N-bit representation as a u16 with 0's prepended for the first 16-N bits
+    pub fn get_truncated_u16(&self) -> u16 {
         assert!(BITS <= 16);
-        self.0 as u16
+        let mask = (1 << BITS) - 1; 
+        (self.0 & mask) as u16
     }
 
     pub fn get(&self) -> i32 {
