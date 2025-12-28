@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::{self, write}};
 
-use crate::asm::{parser::{AddAndKind, Imm9Kind, Origin, StatementKind, parse}, types::{Address, Either, NBitInt}};
+use crate::asm::{parser::{AddAndKind, Imm9Kind, MemRelativeKind, Origin, StatementKind, parse}, types::{Address, Either, NBitInt}};
 use crate::lc3_constants;
 
 
@@ -75,6 +75,14 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
             };
 
             vec![instruction | r0.get_truncated_u16() << 9 | symbol_table.get_or_give_offset::<9>(pc, offset)?]
+        }
+        StatementKind::MemRelative(kind, dr, base, offset) => {
+            let instruction = match kind {
+                MemRelativeKind::Load => lc3_constants::LDR,
+                MemRelativeKind::Store => lc3_constants::STR
+            };
+
+            vec![instruction | dr.get_truncated_u16() << 9 | base.get_truncated_u16() << 6  | offset.get_truncated_u16()]
         }
         StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_truncated_u16() << 9 | r1.get_truncated_u16() << 6 | (1 << 6) - 1],
         StatementKind::Rti => vec![lc3_constants::RTI],
@@ -316,12 +324,14 @@ mod tests {
             jsrr r5
             ld r2 label
             ldi r3 label
+            ldr r1 r2 x8
             lea r4 label
             not r1 r2
             ret
             rti
             st r5 label
             sti r5 label
+            str r7 r0 #-32
             trap x18
             .end").unwrap(),
             vec![
@@ -337,12 +347,14 @@ mod tests {
                         0x4140, // jsrr
                         0x25FB, // ld
                         0xA7FA, // ldi
-                        0xE9F9, // lea
+                        0x6288, // ldr
+                        0xE9F8, // lea
                         0x92BF, // not
                         0xC1C0, // ret
                         0x8000, // rti
-                        0x3BF5, // st
-                        0xBBF4, // sti
+                        0x3BF4, // st
+                        0xBBF3, // sti
+                        0x7E20, // str
                         0xF018, // trap
                     ]
                 }

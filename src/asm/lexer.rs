@@ -146,12 +146,14 @@ impl<'a> Iterator for Lexer<'a> {
                     "jsrr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jsrr))),
                     "ld" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ld))),
                     "ldi" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ldi))),
+                    "ldr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ldr))),
                     "lea" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Lea))),
                     "not" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Not))),
                     "ret" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ret))),
                     "rti" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Rti))),
                     "st" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::St))),
                     "sti" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Sti))),
+                    "str" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Str))),
                     "trap" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Trap))),
                     _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
                     slice if !(
@@ -224,14 +226,14 @@ pub enum InstructionSymbol {
     Jsrr,
     Ld,
     Ldi,
-    // Ldr,
+    Ldr,
     Lea,
     Not,
     Ret,
     Rti,
     St,
     Sti,
-    // Str,
+    Str,
     Trap,
     // Out,
     // Puts,
@@ -270,7 +272,7 @@ mod tests {
     fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind("add AdD and aND jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI lea LEa not Not ret rEt rti RTI st ST sti sTi trap TrAp"),
+            lex_unwrap_kind("add AdD and aND jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI ldr LDR lea LEa not Not ret rEt rti RTI st ST sti sTi str stR trap TrAp"),
             vec![
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(Add),
@@ -286,6 +288,8 @@ mod tests {
                 LexemeKind::Instruction(Ld),
                 LexemeKind::Instruction(Ldi),
                 LexemeKind::Instruction(Ldi),
+                LexemeKind::Instruction(Ldr),
+                LexemeKind::Instruction(Ldr),
                 LexemeKind::Instruction(Lea),
                 LexemeKind::Instruction(Lea),
                 LexemeKind::Instruction(Not),
@@ -298,6 +302,8 @@ mod tests {
                 LexemeKind::Instruction(St),
                 LexemeKind::Instruction(Sti),
                 LexemeKind::Instruction(Sti),
+                LexemeKind::Instruction(Str),
+                LexemeKind::Instruction(Str),
                 LexemeKind::Instruction(Trap),
                 LexemeKind::Instruction(Trap),]
         )

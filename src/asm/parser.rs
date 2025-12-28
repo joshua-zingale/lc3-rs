@@ -1,6 +1,6 @@
 use std::vec;
 
-use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm9, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
+use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm6, Imm9, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
 
 pub fn parse(source: &str) -> Result<Vec<Origin>, Vec<ParsingError>> {
     let lexemes = lex(source);
@@ -162,6 +162,20 @@ impl<'a> Parser<'a> {
                         lexemes: self.lexemes[self.pos-3..self.pos].to_vec(),
                         label: maybe_label })
                 }
+                symbol @ (InstructionSymbol::Ldr | InstructionSymbol::Str) => {
+                    let kind = match symbol {
+                        InstructionSymbol::Ldr => MemRelativeKind::Load,
+                        InstructionSymbol::Str => MemRelativeKind::Store,
+                        _ => unreachable!()
+                    };
+                    let dr = self.consume_register()?;
+                    let base = self.consume_register()?;
+                    let (_, offset) = self.consume_immediate()?;
+                    Ok(Statement {
+                        kind: StatementKind::MemRelative(kind, dr, base, offset),
+                        lexemes: self.lexemes[self.pos-4..self.pos].to_vec(),
+                        label: maybe_label })
+                },
                 InstructionSymbol::Not => {
                     let r1 = self.consume_register()?;
                     let r2 = self.consume_register()?;
@@ -351,6 +365,7 @@ pub struct Statement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatementKind {
     AddAnd(AddAndKind, RegisterNum, RegisterNum, Either<Imm5, RegisterNum>),
+    MemRelative(MemRelativeKind, RegisterNum, RegisterNum, Imm6),
     Jmp(RegisterNum),
     Jsr(Either<Imm11, String>),
     Jsrr(RegisterNum),
@@ -359,6 +374,12 @@ pub enum StatementKind {
     Rti,
     Trap(TrapVec),
 
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MemRelativeKind {
+    Load,
+    Store,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
