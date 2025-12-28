@@ -54,17 +54,11 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
         StatementKind::And(r0,r1 ,r2 ) => vec![lc3_constants::AND | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | r2.get_truncated_u16()],
         StatementKind::AndI(r0,r1 ,im ) => vec![lc3_constants::AND | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | 1 << 5 | im.get_truncated_u16()],
         StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_truncated_u16() << 6],
-        StatementKind::Jsr(either_offset) => {
-            let offset = match either_offset {
-                Either::A(immediate) => immediate.get_truncated_u16(),
-                Either::B(symbol) => {
-                    symbol_table.get_offset::<11>(pc, symbol)?
-                },
-            };
-            vec![lc3_constants::JSR | 1 << 11 | offset]
+        StatementKind::Jsr(offset) => {
+            vec![lc3_constants::JSR | 1 << 11 | symbol_table.get_or_give_offset::<11>(pc, offset)?]
         },
         StatementKind::Jsrr(r0) => vec![lc3_constants::JSR | r0.get_truncated_u16() << 6],
-        StatementKind::Imm9MemInstruction(kind, r0, label) => {
+        StatementKind::Imm9MemInstruction(kind, r0, offset) => {
             let instruction= match kind {
                 Imm9Kind::Ld => lc3_constants::LD,
                 Imm9Kind::Ldi => lc3_constants::LDI,
@@ -73,7 +67,7 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
                 Imm9Kind::Sti => lc3_constants::STI,
             };
 
-            vec![instruction | r0.get_truncated_u16() << 9 | symbol_table.get_offset::<9>(pc, label)?]
+            vec![instruction | r0.get_truncated_u16() << 9 | symbol_table.get_or_give_offset::<9>(pc, offset)?]
         }
         StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_truncated_u16() << 9 | r1.get_truncated_u16() << 6 | (1 << 6) - 1],
         StatementKind::Rti => vec![lc3_constants::RTI],
@@ -172,6 +166,18 @@ impl<'a> SymbolTable {
         let n_bit_number = NBitInt::<BITS, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(symbol.to_string(), e.attempted_num, e.bits as u8))?;
         Ok(n_bit_number.get_truncated_u16())
     }
+
+    pub fn get_or_give_offset<const BITS: u32>(&self, pc: u16, offset_or_symbol: &Either<NBitInt<BITS, true>, String>) -> Result<u16, AssemblyError> {
+       let n_bit_offset = match offset_or_symbol {
+            Either::A(offset) => *offset,
+            Either::B(symbol) => {
+                let signed_offset = self.get(symbol)? as i32 - pc as i32;
+                NBitInt::<BITS, true>::new(signed_offset).map_err(|e| AssemblyError::OffsetOutOfRange(symbol.to_string(), e.attempted_num, e.bits as u8))?
+            }
+        };
+        
+        Ok(n_bit_offset.get_truncated_u16())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -259,6 +265,33 @@ mod tests {
                     ]
                 }
             ]
+        )
+    }
+
+    #[test]
+    fn assembles_immediate_offsets() {
+        assert_eq!(
+            assemble("
+            .orig x3000
+            jsr xFF
+            ld r2 x01
+            ldi r3 x02
+            lea r4 x03
+            st r5 x04
+            sti r5 x05
+            .end
+            ").unwrap(),
+            vec![MachineCode {
+                start_address: Address::new(0x3000).unwrap(),
+                code: vec![
+                    0x48FF, // jsr
+                    0x2401, // ld
+                    0xA602, // ldi
+                    0xE803, // lea
+                    0x3A04, // sti
+                    0xBA05, // sti
+                ]
+            }]
         )
     }
 

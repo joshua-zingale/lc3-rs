@@ -1,6 +1,6 @@
 use std::vec;
 
-use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
+use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm9, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
 
 pub fn parse(source: &str) -> Result<Vec<Origin>, Vec<ParsingError>> {
     let lexemes = lex(source);
@@ -153,7 +153,7 @@ impl<'a> Parser<'a> {
                 }
                 symbol @ (InstructionSymbol::Ld | InstructionSymbol::Ldi | InstructionSymbol::Lea | InstructionSymbol::St | InstructionSymbol::Sti) => {
                     let r0 = self.consume_register()?;
-                    let label = self.consume_label()?;
+                    let offset = self.consume_immediate_or_label()?;
                     let imm9_kind = match symbol {
                         InstructionSymbol::Ld => Imm9Kind::Ld,
                         InstructionSymbol::Ldi => Imm9Kind::Ldi,
@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
                     };
 
                     Ok(Statement {
-                        kind: StatementKind::Imm9MemInstruction(imm9_kind, r0, label),
+                        kind: StatementKind::Imm9MemInstruction(imm9_kind, r0, offset),
                         lexemes: self.lexemes[self.pos-3..self.pos].to_vec(),
                         label: maybe_label })
                 }
@@ -363,7 +363,7 @@ pub enum StatementKind {
     Jmp(RegisterNum),
     Jsr(Either<Imm11, String>),
     Jsrr(RegisterNum),
-    Imm9MemInstruction(Imm9Kind, RegisterNum, String),
+    Imm9MemInstruction(Imm9Kind, RegisterNum, Either<Imm9, String>),
     Not(RegisterNum, RegisterNum),
     Rti,
     Trap(TrapVec),
