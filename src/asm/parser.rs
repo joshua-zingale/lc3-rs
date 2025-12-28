@@ -109,24 +109,18 @@ impl<'a> Parser<'a> {
             LexemeKind::Directive(DirectiveSymbol::Orig) => Err(self.make_error(ParsingErrorKind::ExpectedButFound("instruction".to_string(), "ORIG directive".to_string()))),
             LexemeKind::Directive(DirectiveSymbol::End) => Err(self.make_error(ParsingErrorKind::ExpectedButFound("instruction".to_string(), "END directive".to_string()))),
             LexemeKind::Instruction(symbol) => match symbol {
-                InstructionSymbol::Add => {
+                s @ (InstructionSymbol::Add | InstructionSymbol::And) => {
                     let r1 = self.consume_register()?;
                     let r2= self.consume_register()?;
-                    let kind =  match self.consume_immediate_or_register()? {
-                        Either::A(im) => StatementKind::AddI(r1, r2, im),
-                        Either::B(reg) => StatementKind::Add(r1, r2, reg)
-                    };
-                    Ok(Statement {kind, lexemes: self.lexemes[self.pos-4..self.pos].to_vec(), label: maybe_label})
-                },
-                InstructionSymbol::And => {
-                    let r1 = self.consume_register()?;
-                    let r2= self.consume_register()?;
-                    let kind =  match self.consume_immediate_or_register()? {
-                        Either::A(im) => StatementKind::AndI(r1, r2, im),
-                        Either::B(reg) => StatementKind::And(r1, r2, reg)
+                    let r3_or_immediate =  self.consume_immediate_or_register()?;
+                    
+                    let kind = match s {
+                        InstructionSymbol::Add => AddAndKind::Add,
+                        InstructionSymbol::And => AddAndKind::And,
+                        _ => unreachable!()
                     };
                     Ok(Statement {
-                        kind,
+                        kind: StatementKind::AddAnd(kind, r1, r2, r3_or_immediate),
                         lexemes: self.lexemes[self.pos-4..self.pos].to_vec(),
                         label: maybe_label})
                 },
@@ -356,10 +350,7 @@ pub struct Statement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatementKind {
-    Add(RegisterNum, RegisterNum, RegisterNum),
-    AddI(RegisterNum, RegisterNum, Imm5),
-    And(RegisterNum, RegisterNum, RegisterNum),
-    AndI(RegisterNum, RegisterNum, Imm5),
+    AddAnd(AddAndKind, RegisterNum, RegisterNum, Either<Imm5, RegisterNum>),
     Jmp(RegisterNum),
     Jsr(Either<Imm11, String>),
     Jsrr(RegisterNum),
@@ -368,6 +359,12 @@ pub enum StatementKind {
     Rti,
     Trap(TrapVec),
 
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AddAndKind {
+    Add,
+    And
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -416,7 +413,7 @@ mod tests {
             origin.statements,
             vec![
                 Statement{
-                    kind: StatementKind::Add(RegisterNum::new(0).unwrap(), RegisterNum::new(1).unwrap(), RegisterNum::new(2).unwrap()),
+                    kind: StatementKind::AddAnd(AddAndKind::Add, RegisterNum::new(0).unwrap(), RegisterNum::new(1).unwrap(), Either::B(RegisterNum::new(2).unwrap())),
                     lexemes: lexemes[3..7].to_vec(),
                     label: None,
                 }
@@ -443,12 +440,12 @@ mod tests {
             origin.statements,
             vec![
                 Statement{
-                    kind: StatementKind::AddI(RegisterNum::new(0).unwrap(), RegisterNum::new(1).unwrap(), Imm5::new(12).unwrap()),
+                    kind: StatementKind::AddAnd(AddAndKind::Add, RegisterNum::new(0).unwrap(), RegisterNum::new(1).unwrap(), Either::A(Imm5::new(12).unwrap())),
                     lexemes: lexemes[3..7].to_vec(),
                     label: None,
                 },
                 Statement{
-                    kind: StatementKind::And(RegisterNum::new(7).unwrap(), RegisterNum::new(2).unwrap(), RegisterNum::new(5).unwrap()),
+                    kind: StatementKind::AddAnd(AddAndKind::And, RegisterNum::new(7).unwrap(), RegisterNum::new(2).unwrap(), Either::B(RegisterNum::new(5).unwrap())),
                     lexemes: lexemes[8..12].to_vec(),
                     label: None,
                 }

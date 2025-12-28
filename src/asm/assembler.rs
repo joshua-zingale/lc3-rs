@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::{self, write}};
 
-use crate::asm::{parser::{Imm9Kind, Origin, StatementKind, parse}, types::{Address, Either, NBitInt}};
+use crate::asm::{parser::{AddAndKind, Imm9Kind, Origin, StatementKind, parse}, types::{Address, Either, NBitInt}};
 use crate::lc3_constants;
 
 
@@ -49,10 +49,17 @@ pub fn assemble_origin(origin: &Origin, symbol_table: &SymbolTable) -> Result<Ma
 
 pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table: &SymbolTable) -> Result<Vec<u16>, AssemblyError> {
     let words = match statement_kind {
-        StatementKind::Add(r0,r1 ,r2 ) => vec![lc3_constants::ADD | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | r2.get_truncated_u16()],
-        StatementKind::AddI(r0,r1 ,im ) => vec![lc3_constants::ADD | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | 1 << 5 | im.get_truncated_u16()],
-        StatementKind::And(r0,r1 ,r2 ) => vec![lc3_constants::AND | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | r2.get_truncated_u16()],
-        StatementKind::AndI(r0,r1 ,im ) => vec![lc3_constants::AND | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | 1 << 5 | im.get_truncated_u16()],
+        StatementKind::AddAnd(kind, r0, r1, immediate_or_r2) => {
+            let instruction = match kind {
+                AddAndKind::Add => lc3_constants::ADD,
+                AddAndKind::And => lc3_constants::AND
+            };
+            let termination = match immediate_or_r2 {
+                Either::A(im) => 1 << 5 | im.get_truncated_u16(),
+                Either::B(r2) => r2.get_truncated_u16()
+            };
+            vec![instruction | (r0.get_truncated_u16() << 9) | r1.get_truncated_u16() << 6 | termination]
+        },
         StatementKind::Jmp(r0) => vec![lc3_constants::JMP | r0.get_truncated_u16() << 6],
         StatementKind::Jsr(offset) => {
             vec![lc3_constants::JSR | 1 << 11 | symbol_table.get_or_give_offset::<11>(pc, offset)?]
