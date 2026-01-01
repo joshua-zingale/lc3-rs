@@ -1,4 +1,3 @@
-
 use crate::asm::types::{Location, ParsingError, ParsingErrorKind, RegisterNum};
 
 pub fn lex(source: &str) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>>> {
@@ -12,7 +11,7 @@ pub fn lex(source: &str) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>
 }
 
 #[derive(Clone)]
-pub struct Lexer<'a>{
+pub struct Lexer<'a> {
     source: &'a str,
     pos: Location,
     start_of_curr_lexeme: Location,
@@ -20,12 +19,16 @@ pub struct Lexer<'a>{
 
 impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Lexer<'a> {
-        Lexer { source: source, pos: Location::default(), start_of_curr_lexeme: Location::default() }
+        Lexer {
+            source: source,
+            pos: Location::default(),
+            start_of_curr_lexeme: Location::default(),
+        }
     }
 }
 
 impl<'a> Lexer<'a> {
-     fn peek_char(&self) -> Option<char> {
+    fn peek_char(&self) -> Option<char> {
         self.source[self.pos.offset..].chars().next()
     }
 
@@ -35,7 +38,7 @@ impl<'a> Lexer<'a> {
                 self.pos.advance(c);
                 Some(c)
             }
-            None => None
+            None => None,
         }
     }
 
@@ -59,24 +62,34 @@ impl<'a> Lexer<'a> {
         lexeme.next();
         lexeme.collect()
     }
-    
-    fn make_error(&self, kind: ParsingErrorKind) -> ParsingError {
-        ParsingError{kind: kind, start: self.start_of_curr_lexeme, end: self.pos}
-    }
-    fn make_lexeme(&self, kind: LexemeKind ) -> Lexeme {
-        Lexeme{kind: kind, start: self.start_of_curr_lexeme, end: self.pos}
-    }
 
-    fn advance_to_end_of_word(&mut self) {
-        while let Some(c) = self.peek_char() && !skippable(c) && c != '\n' {
-            self.pos.advance(c);
+    fn make_error(&self, kind: ParsingErrorKind) -> ParsingError {
+        ParsingError {
+            kind: kind,
+            start: self.start_of_curr_lexeme,
+            end: self.pos,
+        }
+    }
+    fn make_lexeme(&self, kind: LexemeKind) -> Lexeme {
+        Lexeme {
+            kind: kind,
+            start: self.start_of_curr_lexeme,
+            end: self.pos,
         }
     }
 
+    fn advance_to_end_of_word(&mut self) {
+        while let Some(c) = self.peek_char()
+            && !skippable(c)
+            && c != '\n'
+        {
+            self.pos.advance(c);
+        }
+    }
 }
 
 fn skippable(char: char) -> bool {
-    return char == ' ' || char == '\t' || char == '\r' || char == ','
+    return char == ' ' || char == '\t' || char == '\r' || char == ',';
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -85,11 +98,10 @@ impl<'a> Iterator for Lexer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(c) = self.peek_char() {
             if !skippable(c) {
-                break
+                break;
             }
 
             self.advance_char();
-
         }
 
         self.start_lexeme();
@@ -98,30 +110,38 @@ impl<'a> Iterator for Lexer<'a> {
 
         return Some(match first_char {
             '\n' => {
-                while let Some(c) = self.peek_char() && (skippable(c) || c == '\n') {
+                while let Some(c) = self.peek_char()
+                    && (skippable(c) || c == '\n')
+                {
                     self.advance_char();
                 }
                 Ok(self.make_lexeme(LexemeKind::LineBreak))
-            },
+            }
             '"' => {
                 let mut stringz = String::new();
                 let mut escaped = false;
                 let mut terminated_string = false;
-                while let Some(c) = self.peek_char() && c != '\n' {
+                while let Some(c) = self.peek_char()
+                    && c != '\n'
+                {
                     self.advance_char();
                     if c == '\\' && !escaped {
                         escaped = true;
-                        continue
+                        continue;
                     }
                     stringz.push(match c {
                         'n' if escaped => '\n',
                         '"' if escaped => '"',
                         '"' if !escaped => {
                             terminated_string = true;
-                            break
-                        },
+                            break;
+                        }
                         c if c.is_ascii() => c,
-                        non_ascii_character => return Some(Err(self.make_error(ParsingErrorKind::NonAsciiCharacter(non_ascii_character))))
+                        non_ascii_character => {
+                            return Some(Err(self.make_error(ParsingErrorKind::NonAsciiCharacter(
+                                non_ascii_character,
+                            ))));
+                        }
                     });
                     escaped = false;
                 }
@@ -139,43 +159,59 @@ impl<'a> Iterator for Lexer<'a> {
                     "orig" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Orig))),
                     "fill" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Fill))),
                     "blkw" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Blkw))),
-                    "stringz" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Stringz))),
+                    "stringz" => {
+                        Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Stringz)))
+                    }
                     "end" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::End))),
                     _ => {
-                        Err(self.make_error(ParsingErrorKind::InvalidDirective(directive.to_string())))
+                        Err(self
+                            .make_error(ParsingErrorKind::InvalidDirective(directive.to_string())))
                     }
                 }
             }
             '#' => {
                 self.advance_to_end_of_word();
                 let lexeme_slice = self.lexeme_slice_unchecked();
-                let str_number =  lexeme_slice['#'.len_utf8()..].chars();
+                let str_number = lexeme_slice['#'.len_utf8()..].chars();
                 if lexeme_slice.len() >= 2 {
                     let Ok(value) = str_number.as_str().parse() else {
-                        return Some(Err(self.make_error(ParsingErrorKind::InvalidDecimalNumber(str_number.collect()))))
+                        return Some(Err(self.make_error(
+                            ParsingErrorKind::InvalidDecimalNumber(str_number.collect()),
+                        )));
                     };
                     Ok(self.make_lexeme(LexemeKind::Immediate(value)))
                 } else {
-                    Err(self.make_error(ParsingErrorKind::InvalidDecimalNumber(str_number.collect())))
+                    Err(self
+                        .make_error(ParsingErrorKind::InvalidDecimalNumber(str_number.collect())))
                 }
-            },
+            }
             'x' | 'X' if i32::from_str_radix(&self.peek_lexeme_cdr(), 16).is_ok() => {
                 self.advance_to_end_of_word();
-                Ok(self.make_lexeme(LexemeKind::Immediate(i32::from_str_radix(&self.peek_lexeme_cdr(), 16).unwrap())))
-            },
+                Ok(self.make_lexeme(LexemeKind::Immediate(
+                    i32::from_str_radix(&self.peek_lexeme_cdr(), 16).unwrap(),
+                )))
+            }
             _ => {
                 self.advance_to_end_of_word();
-                let lexeme_slice= self.lexeme_slice_unchecked();
+                let lexeme_slice = self.lexeme_slice_unchecked();
                 let lexeme_slice_bytes = lexeme_slice.as_bytes();
-                if lexeme_slice_bytes.len() == 2 && (lexeme_slice_bytes[0] == b'r' || lexeme_slice_bytes[0] == b'R') && (b'0'..=b'7').contains(&lexeme_slice_bytes[1]) {
-                    return Some(Ok(self.make_lexeme(LexemeKind::Register(RegisterNum::new(i32::try_from(lexeme_slice_bytes[1] - b'0').unwrap()).unwrap()))))
+                if lexeme_slice_bytes.len() == 2
+                    && (lexeme_slice_bytes[0] == b'r' || lexeme_slice_bytes[0] == b'R')
+                    && (b'0'..=b'7').contains(&lexeme_slice_bytes[1])
+                {
+                    return Some(Ok(self.make_lexeme(LexemeKind::Register(
+                        RegisterNum::new(i32::try_from(lexeme_slice_bytes[1] - b'0').unwrap())
+                            .unwrap(),
+                    ))));
                 }
                 match lexeme_slice.to_lowercase().as_str() {
                     "add" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Add))),
                     "and" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::And))),
                     "jmp" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jmp))),
                     "jsr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jsr))),
-                    "jsrr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jsrr))),
+                    "jsrr" => {
+                        Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Jsrr)))
+                    }
                     "ld" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ld))),
                     "ldi" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ldi))),
                     "ldr" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Ldr))),
@@ -186,22 +222,36 @@ impl<'a> Iterator for Lexer<'a> {
                     "st" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::St))),
                     "sti" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Sti))),
                     "str" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Str))),
-                    "trap" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Trap))),
-                    "getc" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Getc))),
+                    "trap" => {
+                        Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Trap)))
+                    }
+                    "getc" => {
+                        Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Getc)))
+                    }
                     "out" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Out))),
-                    "puts" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Puts))),
+                    "puts" => {
+                        Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Puts)))
+                    }
                     "in" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::In))),
-                    "putsp" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Putsp))),
-                    "halt" => Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Halt))),
-                    _ if lexeme_slice.len() > 20 => Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len()))),
-                    slice if !(
-                        slice.chars().all(|c|
+                    "putsp" => {
+                        Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Putsp)))
+                    }
+                    "halt" => {
+                        Ok(self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Halt)))
+                    }
+                    _ if lexeme_slice.len() > 20 => {
+                        Err(self.make_error(ParsingErrorKind::LabelTooLong(lexeme_slice.len())))
+                    }
+                    slice
+                        if !(slice.chars().all(|c| {
                             ('a'..='z').contains(&c)
-                            || ('A'..='Z').contains(&c)
-                            || ('0'..='9').contains(&c))
-                        && (
-                            ('a'..='z').contains(&first_char)
-                            || ('A'..='Z').contains(&first_char))) => Err(self.make_error(ParsingErrorKind::InvalidCharacterInLabel)),
+                                || ('A'..='Z').contains(&c)
+                                || ('0'..='9').contains(&c)
+                        }) && (('a'..='z').contains(&first_char)
+                            || ('A'..='Z').contains(&first_char))) =>
+                    {
+                        Err(self.make_error(ParsingErrorKind::InvalidCharacterInLabel))
+                    }
                     lowercase_slice => {
                         let mut chars = lowercase_slice.chars().peekable();
                         if Some('b') == chars.next() && Some('r') == chars.next() {
@@ -210,19 +260,18 @@ impl<'a> Iterator for Lexer<'a> {
                             let p = None != chars.next_if(|&e| e == 'p');
 
                             if None == chars.next() {
-                                return Some(Ok(
-                                    self.make_lexeme(LexemeKind::Instruction(InstructionSymbol::Br(n,z,p)))
-                                ))
+                                return Some(Ok(self.make_lexeme(LexemeKind::Instruction(
+                                    InstructionSymbol::Br(n, z, p),
+                                ))));
                             }
                         }
                         Ok(self.make_lexeme(LexemeKind::Label(lowercase_slice.to_string())))
                     }
                 }
             }
-        })
+        });
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lexeme {
@@ -247,20 +296,23 @@ impl LexemeKind {
         use LexemeKind::*;
         match self {
             Directive(sym) => {
-                format!("{} directive", match sym {
-                    DirectiveSymbol::Orig => "ORIG",
-                    DirectiveSymbol::Fill => "FILL",
-                    DirectiveSymbol::Blkw => "BLKW",
-                    DirectiveSymbol::Stringz => "STRINGZ",
-                    DirectiveSymbol::End => "END"
-                })
-            },
+                format!(
+                    "{} directive",
+                    match sym {
+                        DirectiveSymbol::Orig => "ORIG",
+                        DirectiveSymbol::Fill => "FILL",
+                        DirectiveSymbol::Blkw => "BLKW",
+                        DirectiveSymbol::Stringz => "STRINGZ",
+                        DirectiveSymbol::End => "END",
+                    }
+                )
+            }
             Immediate(_) => "immediate".to_string(),
             Instruction(_) => "instruction".to_string(),
             Label(_) => "label".to_string(),
             Register(_) => "register".to_string(),
             String(_) => "string literal".to_string(),
-            LineBreak => "line break".to_string()
+            LineBreak => "line break".to_string(),
         }
     }
 }
@@ -301,21 +353,22 @@ pub enum InstructionSymbol {
     Halt,
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::types::RegisterNum;
+    use super::*;
 
     fn lex_unwrap_kind(source: &str) -> Vec<LexemeKind> {
         Lexer::new(source).map(|x| x.unwrap().kind).collect()
     }
 
     fn lex_errors(source: &str) -> Vec<ParsingError> {
-        Lexer::new(source).filter_map(|x| match x {
-            Ok(_) => None,
-            Err(e) => Some(e)
-        }).collect()
+        Lexer::new(source)
+            .filter_map(|x| match x {
+                Ok(_) => None,
+                Err(e) => Some(e),
+            })
+            .collect()
     }
     #[test]
     fn directives() {
@@ -348,7 +401,7 @@ mod tests {
                 LexemeKind::Instruction(Putsp),
                 LexemeKind::Instruction(Halt),
                 LexemeKind::Instruction(Halt),
-                ]
+            ]
         )
     }
 
@@ -356,7 +409,9 @@ mod tests {
     fn instruction_symbols() {
         use InstructionSymbol::*;
         assert_eq!(
-            lex_unwrap_kind("add AdD and aND br brn brz brnz brp brnp brzp brnzp jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI ldr LDR lea LEa not Not ret rEt rti RTI st ST sti sTi str stR trap TrAp"),
+            lex_unwrap_kind(
+                "add AdD and aND br brn brz brnz brp brnp brzp brnzp jmp JmP jsr Jsr jsrr JSRR ld Ld ldi lDI ldr LDR lea LEa not Not ret rEt rti RTI st ST sti sTi str stR trap TrAp"
+            ),
             vec![
                 LexemeKind::Instruction(Add),
                 LexemeKind::Instruction(Add),
@@ -397,7 +452,8 @@ mod tests {
                 LexemeKind::Instruction(Str),
                 LexemeKind::Instruction(Str),
                 LexemeKind::Instruction(Trap),
-                LexemeKind::Instruction(Trap),]
+                LexemeKind::Instruction(Trap),
+            ]
         )
     }
     #[test]
@@ -413,17 +469,15 @@ mod tests {
                 LexemeKind::Register(RegisterNum::new(5).unwrap()),
                 LexemeKind::Register(RegisterNum::new(6).unwrap()),
                 LexemeKind::Register(RegisterNum::new(7).unwrap())
-                ]
+            ]
         )
     }
 
-     #[test]
+    #[test]
     fn line_break() {
         assert_eq!(
             lex_unwrap_kind("  \n \n \n\n \n"),
-            vec![
-                LexemeKind::LineBreak
-                ]
+            vec![LexemeKind::LineBreak]
         )
     }
 
@@ -440,7 +494,7 @@ mod tests {
                 LexemeKind::Label("of".to_string()),
                 LexemeKind::Label("labels".to_string()),
                 LexemeKind::Label("xray".to_string())
-                ]
+            ]
         )
     }
 
@@ -450,17 +504,53 @@ mod tests {
 
         let lexer = Lexer::new("add\n and");
 
-        let locs: Vec<_> = lexer.map(|x: Result<Lexeme, ParsingError>| {
-            let l = x.unwrap();
-            (l.start, l.end)}).collect();
-        
+        let locs: Vec<_> = lexer
+            .map(|x: Result<Lexeme, ParsingError>| {
+                let l = x.unwrap();
+                (l.start, l.end)
+            })
+            .collect();
+
         assert_eq!(
             locs,
             vec![
-                (Location{line: 1, column: 1, offset: 0}, Location{line: 1, column: 4, offset: 3}),
-                (Location{line: 1, column: 4, offset: 3}, Location{line: 2, column: 2, offset: 5}),
-                (Location{line: 2, column: 2, offset: 5}, Location{line: 2, column: 5, offset: 8})
-                ]
+                (
+                    Location {
+                        line: 1,
+                        column: 1,
+                        offset: 0
+                    },
+                    Location {
+                        line: 1,
+                        column: 4,
+                        offset: 3
+                    }
+                ),
+                (
+                    Location {
+                        line: 1,
+                        column: 4,
+                        offset: 3
+                    },
+                    Location {
+                        line: 2,
+                        column: 2,
+                        offset: 5
+                    }
+                ),
+                (
+                    Location {
+                        line: 2,
+                        column: 2,
+                        offset: 5
+                    },
+                    Location {
+                        line: 2,
+                        column: 5,
+                        offset: 8
+                    }
+                )
+            ]
         )
     }
 
@@ -469,7 +559,9 @@ mod tests {
         assert_eq!(
             lex_unwrap_kind("#103 #3123 #-32"),
             vec![
-                LexemeKind::Immediate(103), LexemeKind::Immediate(3123), LexemeKind::Immediate(-32)
+                LexemeKind::Immediate(103),
+                LexemeKind::Immediate(3123),
+                LexemeKind::Immediate(-32)
             ]
         )
     }
@@ -479,7 +571,9 @@ mod tests {
         assert_eq!(
             lex_unwrap_kind("x103 X3123 x-32"),
             vec![
-                LexemeKind::Immediate(0x103), LexemeKind::Immediate(0x3123), LexemeKind::Immediate(-0x32)
+                LexemeKind::Immediate(0x103),
+                LexemeKind::Immediate(0x3123),
+                LexemeKind::Immediate(-0x32)
             ]
         )
     }
@@ -488,18 +582,29 @@ mod tests {
     fn long_label_errors() {
         assert_eq!(
             lex_errors("o12345678901234567890"),
-            vec![
-                ParsingError{
-                    kind: ParsingErrorKind::LabelTooLong(21),
-                    start: Location{line:1,column:1, offset: 0},
-                    end: Location{line: 1, column: 22, offset:21}}]
+            vec![ParsingError {
+                kind: ParsingErrorKind::LabelTooLong(21),
+                start: Location {
+                    line: 1,
+                    column: 1,
+                    offset: 0
+                },
+                end: Location {
+                    line: 1,
+                    column: 22,
+                    offset: 21
+                }
+            }]
         )
     }
 
     #[test]
     fn invalid_decimal_number_error() {
         assert_eq!(
-            lex_errors("#104 #3-3 #b5 #-3-").iter().map(|x| x.kind.clone()).collect::<Vec<_>>(),
+            lex_errors("#104 #3-3 #b5 #-3-")
+                .iter()
+                .map(|x| x.kind.clone())
+                .collect::<Vec<_>>(),
             vec![
                 ParsingErrorKind::InvalidDecimalNumber("3-3".to_string()),
                 ParsingErrorKind::InvalidDecimalNumber("b5".to_string()),
@@ -512,9 +617,7 @@ mod tests {
     fn string() {
         assert_eq!(
             lex_unwrap_kind("\"Hello, World!\""),
-            vec![
-                LexemeKind::String("Hello, World!".to_string())
-            ]
+            vec![LexemeKind::String("Hello, World!".to_string())]
         )
     }
 
@@ -522,9 +625,7 @@ mod tests {
     fn string_with_escapes() {
         assert_eq!(
             lex_unwrap_kind("\"Hello,\\n\\\"World!\""),
-            vec![
-                LexemeKind::String("Hello,\n\"World!".to_string())
-            ]
+            vec![LexemeKind::String("Hello,\n\"World!".to_string())]
         )
     }
 }

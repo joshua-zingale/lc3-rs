@@ -13,4 +13,3 @@ pub const ST: u16 = 0x3000;
 pub const STI: u16 = 0xB000;
 pub const STR: u16 = 0x7000;
 pub const TRAP: u16 = 0xF000;
-
