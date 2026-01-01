@@ -108,6 +108,7 @@ impl<'a> Iterator for Lexer<'a> {
                 let directive = &self.lexeme_slice_unchecked()[1..];
                 match directive.to_lowercase().as_str() {
                     "orig" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Orig))),
+                    "fill" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Fill))),
                     "end" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::End))),
                     _ => {
                         Err(self.make_error(ParsingErrorKind::InvalidDirective(directive.to_string())))
@@ -217,6 +218,7 @@ impl LexemeKind {
             Directive(sym) => {
                 format!("{} directive", match sym {
                     DirectiveSymbol::Orig => "ORIG",
+                    DirectiveSymbol::Fill => "FILL",
                     DirectiveSymbol::End => "END"
                 })
             },
@@ -233,6 +235,7 @@ impl LexemeKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DirectiveSymbol {
     Orig,
+    Fill,
     End,
 }
 

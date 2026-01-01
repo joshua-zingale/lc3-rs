@@ -1,13 +1,13 @@
 use std::{collections::HashMap, fmt::{self, write}};
 
-use crate::asm::{parser::{AddAndKind, Imm9Kind, MemRelativeKind, Origin, StatementKind, parse}, types::{Address, Either, NBitInt}};
+use crate::asm::{parser::{AddAndKind, Imm9Kind, MemRelativeKind, Origin, StatementKind, parse}, types::{Address, Either, NBitInt, ParsingError}};
 use crate::lc3_constants;
 
 
-pub fn assemble(source: &str) -> Result<Vec<MachineCode>, ()> {
-    let origins = parse(source).unwrap();
-    let table = get_symbol_table(&origins).unwrap();
-    let codes = assemble_origins(&origins, &table).unwrap();
+pub fn assemble(source: &str) -> Result<Vec<MachineCode>, AssemblyPipelineError> {
+    let origins = parse(source).map_err(|e| AssemblyPipelineError::ParsingError(e))?;
+    let table = get_symbol_table(&origins).map_err(|(_, e)| AssemblyPipelineError::AssemblyError(e))?;
+    let codes = assemble_origins(&origins, &table).map_err(|e| AssemblyPipelineError::AssemblyError(e))?;
     Ok(codes)
 }
 
@@ -90,7 +90,14 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
         }
         StatementKind::Not(r0,r1 ) => vec![lc3_constants::NOT | r0.get_truncated_u16() << 9 | r1.get_truncated_u16() << 6 | (1 << 6) - 1],
         StatementKind::Rti => vec![lc3_constants::RTI],
-        StatementKind::Trap(trap_vec) => vec![lc3_constants::TRAP | trap_vec.get_truncated_u16()]
+        StatementKind::Trap(trap_vec) => vec![lc3_constants::TRAP | trap_vec.get_truncated_u16()],
+        StatementKind::Fill(immediate_or_label) => {
+            let value = match immediate_or_label {
+                Either::A(im) => *im,
+                Either::B(label) => symbol_table.get(label)?,
+            };
+            vec![value]
+        }
     };
 
     Ok(words)
@@ -197,6 +204,12 @@ impl<'a> SymbolTable {
         
         Ok(n_bit_offset.get_truncated_u16())
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AssemblyPipelineError {
+    AssemblyError(Vec<AssemblyError>),
+    ParsingError(Vec<ParsingError>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -411,6 +424,42 @@ mod tests {
                     ]
                 }
             ]
+        )
+    }
+
+    #[test]
+    fn assembles_fill() {
+        assert_eq!(
+            assemble("
+            .orig x3000
+            zero .fill xFFFF
+            one .fill #16
+            .fill x-7FFF
+            .fill zero
+            .fill one
+            .end").unwrap(),
+            vec![
+                MachineCode {
+                    start_address: Address::new(0x3000).unwrap(),
+                    code: vec![
+                        0xFFFF,
+                        16,
+                        2_u16.pow(15) + 1,
+                        0x3000,
+                        0x3001,
+                    ]
+                }
+            ]
+        )
+    }
+
+    #[test]
+    fn fails_to_assemble_fill_with_out_of_range_immediate() {
+        assert!(
+            assemble("
+            .orig x3000
+            zero .fill x10000
+            .end").is_err()
         )
     }
 }

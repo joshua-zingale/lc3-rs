@@ -1,6 +1,6 @@
-use std::{string::ParseError, vec};
+use std::vec;
 
-use crate::asm::{assembler::AssemblyError, lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm6, Imm9, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
+use crate::asm::{lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex}, types::{Address, Either, Imm5, Imm6, Imm9, Imm11, Location, NBitInt, ParsingError, ParsingErrorKind, RegisterNum, TrapVec}};
 
 pub fn parse(source: &str) -> Result<Vec<Origin>, Vec<ParsingError>> {
     let lexemes = lex(source);
@@ -106,8 +106,29 @@ impl<'a> Parser<'a> {
         self.skip(LexemeKind::LineBreak);
         let instruction_lexeme = self.consume_any("instruction")?;
         match &instruction_lexeme.kind {
-            LexemeKind::Directive(DirectiveSymbol::Orig) => Err(self.make_error(ParsingErrorKind::ExpectedButFound("instruction".to_string(), "ORIG directive".to_string()))),
-            LexemeKind::Directive(DirectiveSymbol::End) => Err(self.make_error(ParsingErrorKind::ExpectedButFound("instruction".to_string(), "END directive".to_string()))),
+            LexemeKind::Directive(symbol) => match symbol {
+                DirectiveSymbol::Orig => Err(self.make_error(ParsingErrorKind::ExpectedButFound("instruction".to_string(), "ORIG directive".to_string()))),
+                DirectiveSymbol::End => Err(self.make_error(ParsingErrorKind::ExpectedButFound("instruction".to_string(), "END directive".to_string()))),
+                DirectiveSymbol::Fill => {
+                    let value = match &self.curr_lexeme_or_error("immediate or label")?.kind {
+                        LexemeKind::Immediate(value) => {
+                            if *value > u16::MAX.into() {
+                                Err(self.make_error(ParsingErrorKind::ImmediateOutOfRange(16, *value, false)))?
+                            } else if *value < i16::MIN.into() {
+                                Err(self.make_error(ParsingErrorKind::ImmediateOutOfRange(16, *value, true)))?
+                            }
+                            Either::A(*value as u16)
+                        },
+                        LexemeKind::Label(label) => Either::B(label.to_owned()),
+                        other => Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate or label".to_string(), other.string_name())))?
+                    };
+                    self.advance();
+                    Ok(Statement {
+                        kind: StatementKind::Fill(value),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label })
+                }
+            }
             LexemeKind::Instruction(symbol) => match symbol {
                 s @ (InstructionSymbol::Add | InstructionSymbol::And) => {
                     let r1 = self.consume_register()?;
@@ -234,7 +255,7 @@ impl<'a> Parser<'a> {
                     })
                 }
             },
-            _ => todo!()
+            a => todo!("{:?}", a)
         }
     }
 
@@ -249,6 +270,16 @@ impl<'a> Parser<'a> {
             self.advance();
             let n_bit_int = NBitInt::<BITS, SIGNED>::new(value).map_err(|noore| self.make_error(ParsingErrorKind::ImmediateOutOfRange(noore.bits, noore.attempted_num, noore.signed)))?;
             Ok((immediate_lexeme, n_bit_int))
+        } else {
+            Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), immediate_lexeme.kind.string_name())))
+        }
+    }
+
+    fn consume_any_immediate(&mut self) -> Result<(&'a Lexeme, i32), ParsingError> {
+        let immediate_lexeme=  self.curr_lexeme_or_error("immediate value")?;
+        if let LexemeKind::Immediate(value)  = immediate_lexeme.kind {
+            self.advance();
+            Ok((immediate_lexeme, value))
         } else {
             Err(self.make_error(ParsingErrorKind::ExpectedButFound("immediate value".to_string(), immediate_lexeme.kind.string_name())))
         }
@@ -403,7 +434,7 @@ pub enum StatementKind {
     Not(RegisterNum, RegisterNum),
     Rti,
     Trap(TrapVec),
-
+    Fill(Either<u16, String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
