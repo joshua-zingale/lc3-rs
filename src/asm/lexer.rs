@@ -103,6 +103,35 @@ impl<'a> Iterator for Lexer<'a> {
                 }
                 Ok(self.make_lexeme(LexemeKind::LineBreak))
             },
+            '"' => {
+                let mut stringz = String::new();
+                let mut escaped = false;
+                let mut terminated_string = false;
+                while let Some(c) = self.peek_char() && c != '\n' {
+                    self.advance_char();
+                    if c == '\\' && !escaped {
+                        escaped = true;
+                        continue
+                    }
+                    stringz.push(match c {
+                        'n' if escaped => '\n',
+                        '"' if escaped => '"',
+                        '"' if !escaped => {
+                            terminated_string = true;
+                            break
+                        },
+                        c if c.is_ascii() => c,
+                        non_ascii_character => return Some(Err(self.make_error(ParsingErrorKind::NonAsciiCharacter(non_ascii_character))))
+                    });
+                    escaped = false;
+                }
+
+                if terminated_string {
+                    Ok(self.make_lexeme(LexemeKind::String(stringz)))
+                } else {
+                    Err(self.make_error(ParsingErrorKind::UnterminatedStringLiteral))
+                }
+            }
             '.' => {
                 self.advance_to_end_of_word();
                 let directive = &self.lexeme_slice_unchecked()[1..];
@@ -110,6 +139,7 @@ impl<'a> Iterator for Lexer<'a> {
                     "orig" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Orig))),
                     "fill" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Fill))),
                     "blkw" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Blkw))),
+                    "stringz" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Stringz))),
                     "end" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::End))),
                     _ => {
                         Err(self.make_error(ParsingErrorKind::InvalidDirective(directive.to_string())))
@@ -221,6 +251,7 @@ impl LexemeKind {
                     DirectiveSymbol::Orig => "ORIG",
                     DirectiveSymbol::Fill => "FILL",
                     DirectiveSymbol::Blkw => "BLKW",
+                    DirectiveSymbol::Stringz => "STRINGZ",
                     DirectiveSymbol::End => "END"
                 })
             },
@@ -239,6 +270,7 @@ pub enum DirectiveSymbol {
     Orig,
     Fill,
     Blkw,
+    Stringz,
     End,
 }
 
@@ -472,6 +504,26 @@ mod tests {
                 ParsingErrorKind::InvalidDecimalNumber("3-3".to_string()),
                 ParsingErrorKind::InvalidDecimalNumber("b5".to_string()),
                 ParsingErrorKind::InvalidDecimalNumber("-3-".to_string()),
+            ]
+        )
+    }
+
+    #[test]
+    fn string() {
+        assert_eq!(
+            lex_unwrap_kind("\"Hello, World!\""),
+            vec![
+                LexemeKind::String("Hello, World!".to_string())
+            ]
+        )
+    }
+
+    #[test]
+    fn string_with_escapes() {
+        assert_eq!(
+            lex_unwrap_kind("\"Hello,\\n\\\"World!\""),
+            vec![
+                LexemeKind::String("Hello,\n\"World!".to_string())
             ]
         )
     }

@@ -45,6 +45,7 @@ impl fmt::Display for ParsingError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsingErrorKind {
     NonAsciiCharacter(char),
+    UnterminatedStringLiteral,
     LabelTooLong(usize),
     InvalidDecimalNumber(String),
     InvalidDirective(String),
@@ -58,6 +59,7 @@ impl fmt::Display for ParsingErrorKind {
         use ParsingErrorKind::*;
         match self {
             NonAsciiCharacter(c) => write!(f, "invalid ASCII character \"{}\"", c),
+            UnterminatedStringLiteral => write!(f, "unterminated string literal: there should be a '\"' at the end of the line"),
             LabelTooLong(length) => write!(f, "label must be 20 characters or less, but is {} characters long", length),
             InvalidDecimalNumber(invalid_number) => write!(f, "invalid decimal number: {}", invalid_number),
             InvalidDirective(invalid_directive) => write!(f, "invalid directive: {}", invalid_directive),

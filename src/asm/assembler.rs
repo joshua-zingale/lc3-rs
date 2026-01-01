@@ -104,6 +104,11 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
                 v.push(0);
             }
             v
+        },
+        StatementKind::Stringz(s) => {
+            let mut v: Vec<u16> = s.as_bytes().iter().map(|&e| e.into()).collect();
+            v.push(0);
+            v
         }
     };
 
@@ -113,6 +118,7 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
 fn get_statement_size(statement_kind: &StatementKind) -> u16 {
     match statement_kind {
         StatementKind::Blkw(size) => *size,
+        StatementKind::Stringz(s) => (s.len() + 1).try_into().expect("the string is not longer than u16::MAX-1"),
         _ => 1
     }
 }
@@ -293,6 +299,27 @@ mod tests {
                 ("l3", 0x3020),
                 ("l4", 0x3021),
                 ("l5", 0x3031),
+                ]
+        );
+    }
+
+    #[test]
+    fn symbol_table_assigns_correctly_with_stringz() {
+        let lexemes = lex("
+        l1 .orig x3000
+        l2 .stringz \"five\"
+        l3 .fill l2
+        .end").unwrap();
+        let origins = parse_lexemes(&lexemes).unwrap();
+        let table = get_symbol_table(&origins).unwrap();
+        let mut labels_and_addresses: Vec<_> = table.labels().iter().map(|&l| (l, table.get(l).unwrap())).collect();
+        labels_and_addresses.sort_by(|a, b| a.0.cmp(b.0));
+        assert_eq!(
+            labels_and_addresses,
+            vec![
+                ("l1", 0x3000),
+                ("l2", 0x3000),
+                ("l3", 0x3005),
                 ]
         );
     }
@@ -532,6 +559,22 @@ mod tests {
         )
     }
 
+    #[test]
+    fn assembles_stringz() {
+        assert_eq!(
+            assemble("
+            .orig x3000
+            .stringz \"Hello, World!\"
+            .stringz \"\\\"Hey\\\"\\nBob\"
+            .end").unwrap(),
+            vec![
+                MachineCode {
+                    start_address: Address::new(0x3000).unwrap(),
+                    code: b"Hello, World!\0\"Hey\"\nBob\0".iter().map(|&e| e.into()).collect()
+                }
+            ]
+        )
+    }
 
 }
 

@@ -134,6 +134,13 @@ impl<'a> Parser<'a> {
                         kind: StatementKind::Blkw(size.get_truncated_u16()),
                         lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
                         label: maybe_label })
+                },
+                DirectiveSymbol::Stringz => {
+                    let s = self.consume_string_literal()?;
+                    Ok(Statement {
+                        kind: StatementKind::Stringz(s),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label })
                 }
             }
             LexemeKind::Instruction(symbol) => match symbol {
@@ -312,6 +319,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn consume_string_literal(&mut self) -> Result<String, ParsingError> {
+        let lexeme=  self.curr_lexeme_or_error("string literal")?;
+        if let LexemeKind::String(s) = &lexeme.kind {
+            self.advance();
+            Ok(s.clone())
+        } else {
+            Err(self.make_error(ParsingErrorKind::ExpectedButFound("string literal".to_string(), lexeme.kind.string_name())))
+        }
+    }
+
     fn consume_immediate_or_register<const BITS: u32, const SIGNED: bool>(&mut self) -> Result<Either<NBitInt<BITS, SIGNED>, RegisterNum>, ParsingError> {
         let lexeme=  self.curr_lexeme_or_error("immediate value or register")?;
         if let LexemeKind::Immediate(value)  = lexeme.kind {
@@ -443,6 +460,7 @@ pub enum StatementKind {
     Trap(TrapVec),
     Fill(Either<u16, String>),
     Blkw(u16),
+    Stringz(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
