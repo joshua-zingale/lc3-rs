@@ -310,7 +310,7 @@ impl<'a> Parser<'a> {
                     })
                 }
             },
-            a => todo!("{:?}", a),
+            kind => Err(self.make_error(ParsingErrorKind::ExpectedButFound("instruction".to_string(), kind.string_name()))),
         }
     }
 
