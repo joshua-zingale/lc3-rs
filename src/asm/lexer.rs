@@ -109,6 +109,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match directive.to_lowercase().as_str() {
                     "orig" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Orig))),
                     "fill" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Fill))),
+                    "blkw" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::Blkw))),
                     "end" => Ok(self.make_lexeme(LexemeKind::Directive(DirectiveSymbol::End))),
                     _ => {
                         Err(self.make_error(ParsingErrorKind::InvalidDirective(directive.to_string())))
@@ -219,6 +220,7 @@ impl LexemeKind {
                 format!("{} directive", match sym {
                     DirectiveSymbol::Orig => "ORIG",
                     DirectiveSymbol::Fill => "FILL",
+                    DirectiveSymbol::Blkw => "BLKW",
                     DirectiveSymbol::End => "END"
                 })
             },
@@ -236,6 +238,7 @@ impl LexemeKind {
 pub enum DirectiveSymbol {
     Orig,
     Fill,
+    Blkw,
     End,
 }
 

@@ -97,6 +97,13 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
                 Either::B(label) => symbol_table.get(label)?,
             };
             vec![value]
+        },
+        StatementKind::Blkw(size) => {
+            let mut v = Vec::new();
+            for _ in 0..*size {
+                v.push(0);
+            }
+            v
         }
     };
 
@@ -105,6 +112,7 @@ pub fn assemble_statement(statement_kind: &StatementKind, pc: u16, symbol_table:
 
 fn get_statement_size(statement_kind: &StatementKind) -> u16 {
     match statement_kind {
+        StatementKind::Blkw(size) => *size,
         _ => 1
     }
 }
@@ -263,6 +271,33 @@ mod tests {
                 ]
         );
     }
+
+    #[test]
+    fn symbol_table_assigns_correctly_with_blkw() {
+        let lexemes = lex("
+        l1 .orig x3000
+        l2 .blkw x20
+        l3 .fill l2
+        l4 .blkw x10
+        l5 .fill l4
+        .end").unwrap();
+        let origins = parse_lexemes(&lexemes).unwrap();
+        let table = get_symbol_table(&origins).unwrap();
+        let mut labels_and_addresses: Vec<_> = table.labels().iter().map(|&l| (l, table.get(l).unwrap())).collect();
+        labels_and_addresses.sort_by(|a, b| a.0.cmp(b.0));
+        assert_eq!(
+            labels_and_addresses,
+            vec![
+                ("l1", 0x3000),
+                ("l2", 0x3000),
+                ("l3", 0x3020),
+                ("l4", 0x3021),
+                ("l5", 0x3031),
+                ]
+        );
+    }
+
+    
 
     #[test]
     fn assembles_add_and_and() {
@@ -462,5 +497,41 @@ mod tests {
             .end").is_err()
         )
     }
+
+
+    #[test]
+    fn assembles_blkw() {
+        assert_eq!(
+            assemble("
+            .orig x3000
+            .fill xFFFF
+            .blkw #4
+            .fill x1234
+            .blkw x5
+            .fill x4321
+            .end").unwrap(),
+            vec![
+                MachineCode {
+                    start_address: Address::new(0x3000).unwrap(),
+                    code: vec![
+                        0xFFFF,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0x1234,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0x4321,
+                    ]
+                }
+            ]
+        )
+    }
+
+
 }
 

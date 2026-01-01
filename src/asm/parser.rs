@@ -127,6 +127,13 @@ impl<'a> Parser<'a> {
                         kind: StatementKind::Fill(value),
                         lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
                         label: maybe_label })
+                },
+                DirectiveSymbol::Blkw => {
+                    let (_, size) = self.consume_immediate::<16, false>()?;
+                    Ok(Statement {
+                        kind: StatementKind::Blkw(size.get_truncated_u16()),
+                        lexemes: self.lexemes[self.pos-2..self.pos].to_vec(),
+                        label: maybe_label })
                 }
             }
             LexemeKind::Instruction(symbol) => match symbol {
@@ -435,6 +442,7 @@ pub enum StatementKind {
     Rti,
     Trap(TrapVec),
     Fill(Either<u16, String>),
+    Blkw(u16),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
