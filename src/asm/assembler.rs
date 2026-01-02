@@ -3,10 +3,10 @@ use std::{
     fmt::{self, write},
 };
 
-use crate::asm::{
+use crate::{asm::{
     parser::{AddAndKind, Imm9Kind, MemRelativeKind, Origin, StatementKind, parse},
     types::{Address, Either, NBitInt, ParsingError},
-};
+}};
 use crate::lc3_constants;
 
 pub fn assemble(source: &str) -> Result<Vec<MachineCode>, AssemblyPipelineError> {
@@ -44,7 +44,14 @@ pub fn assemble_origin(
 
     let mut pc = origin.start_address.get_truncated_u16();
     for statement in &origin.statements {
-        pc += get_statement_size(&statement.kind);
+        let statement_size =  get_statement_size(&statement.kind);
+        let last_write_address = statement_size as u32 + pc as u32 - 1;
+
+        if last_write_address >= lc3_constants::DEVICE_REGISTER_STARTING_ADDRESS.into() {
+            errors.push(AssemblyError::WriteToIOMappedMemory);
+        }
+
+        pc += statement_size;
 
         match assemble_statement(&statement.kind, pc, symbol_table) {
             Err(e) => errors.push(e),
@@ -292,6 +299,7 @@ pub enum AssemblyError {
     UndefinedSymbol(String),
     LabelOutOfRange(i32),
     OffsetOutOfRange(String, i32, u8),
+    WriteToIOMappedMemory,
 }
 
 impl fmt::Display for AssemblyError {
@@ -303,12 +311,16 @@ impl fmt::Display for AssemblyError {
             Self::UndefinedSymbol(sym) => write!(f, "the label \"{}\" has no definition", sym),
             Self::LabelOutOfRange(address) => write!(
                 f,
-                "the label stands in for address \"{:x}\", which is out of range for the LC-3",
+                "the label stands in for address \"0x{:x}\", which is out of range for the LC-3",
                 address
             ),
             Self::OffsetOutOfRange(label, offset, bits) => write!(
                 f,
-                "\"{label}\" stands for an address that is at an offset of {offset:x}, which is too high in magnitude for a {bits}-bit number."
+                "\"{label}\" stands for an address that is at an offset of 0x{offset:x}, which is too high in magnitude for a {bits}-bit number."
+            ),
+            Self::WriteToIOMappedMemory => write!(
+                f,
+                "cannot write to I/O-mapped memory",
             ),
         }
     }
@@ -632,5 +644,39 @@ mod tests {
                     .collect()
             }]
         )
+    }
+
+    #[test]
+    fn assembler_errors_with_out_of_bounds_memory() {
+        assert!(
+            assemble(
+                "
+            .orig xFFFF
+            .fill x1
+            .fill x2
+            .end"
+            ).is_err()
+        );
+
+        assert!(
+            assemble(
+                "
+            .orig x10000
+            .fill x1
+            .end"
+            ).is_err()
+        );
+    }
+
+    #[test]
+    fn assembles_boundry_memory() {
+        assert!(
+            assemble(
+                "
+            .orig xFDFF
+            .fill x1
+            .end"
+            ).is_ok()
+        );
     }
 }

@@ -61,9 +61,13 @@ impl<'a> Parser<'a> {
 
         let orig_lexeme = self
             .consume(LexemeKind::Directive(DirectiveSymbol::Orig))
-            .map_err(|e| vec![e])?;
+            .map_err(|e| {
+                _ = self.consume_any("");
+                vec![e]})?;
         let (immediate_lexeme, address) =
-            self.consume_immediate::<16, false>().map_err(|e| vec![e])?;
+            self.consume_immediate::<16, false>().map_err(|e| {
+                _ = self.consume_any("");
+                vec![e]})?;
 
         let mut errors = Vec::new();
 
@@ -310,7 +314,10 @@ impl<'a> Parser<'a> {
                     })
                 }
             },
-            kind => Err(self.make_error(ParsingErrorKind::ExpectedButFound("instruction".to_string(), kind.string_name()))),
+            kind => Err(self.make_error(ParsingErrorKind::ExpectedButFound(
+                "instruction".to_string(),
+                kind.string_name(),
+            ))),
         }
     }
 

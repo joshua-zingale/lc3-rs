@@ -138,9 +138,9 @@ impl<'a> Iterator for Lexer<'a> {
                         }
                         c if c.is_ascii() => c,
                         non_ascii_character => {
-                            return Some(Err(self.make_error(ParsingErrorKind::NonAsciiCharacter(
-                                non_ascii_character,
-                            ))));
+                            return Some(Err(self.make_error(
+                                ParsingErrorKind::NonAsciiCharacter(non_ascii_character),
+                            )));
                         }
                     });
                     escaped = false;

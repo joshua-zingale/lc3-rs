@@ -13,3 +13,6 @@ pub const ST: u16 = 0x3000;
 pub const STI: u16 = 0xB000;
 pub const STR: u16 = 0x7000;
 pub const TRAP: u16 = 0xF000;
+
+
+pub const DEVICE_REGISTER_STARTING_ADDRESS: u16 = 0xFE00;
