@@ -1,13 +1,13 @@
-use std::{
-    collections::HashMap,
-    fmt::{self, write},
-};
+use std::{collections::HashMap, fmt};
 
-use crate::{asm::{
+use crate::asm::{
     parser::{AddAndKind, Imm9Kind, MemRelativeKind, Origin, StatementKind, parse},
-    types::{Address, Either, NBitInt, ParsingError},
-}};
-use crate::lc3_constants;
+    types::ParsingError,
+};
+use crate::{
+    lc3_constants,
+    types::{Address, Either, NBitInt},
+};
 
 pub fn assemble(source: &str) -> Result<Vec<MachineCode>, AssemblyPipelineError> {
     let origins = parse(source).map_err(|e| AssemblyPipelineError::ParsingError(e))?;
@@ -44,7 +44,7 @@ pub fn assemble_origin(
 
     let mut pc = origin.start_address.get_truncated_u16();
     for statement in &origin.statements {
-        let statement_size =  get_statement_size(&statement.kind);
+        let statement_size = get_statement_size(&statement.kind);
         let last_write_address = statement_size as u32 + pc as u32 - 1;
 
         if last_write_address >= lc3_constants::DEVICE_REGISTER_STARTING_ADDRESS.into() {
@@ -318,10 +318,7 @@ impl fmt::Display for AssemblyError {
                 f,
                 "\"{label}\" stands for an address that is at an offset of 0x{offset:x}, which is too high in magnitude for a {bits}-bit number."
             ),
-            Self::WriteToIOMappedMemory => write!(
-                f,
-                "cannot write to I/O-mapped memory",
-            ),
+            Self::WriteToIOMappedMemory => write!(f, "cannot write to I/O-mapped memory",),
         }
     }
 }
@@ -330,7 +327,10 @@ impl fmt::Display for AssemblyError {
 mod tests {
 
     use super::*;
-    use crate::asm::{lexer::lex, parse_lexemes, types::Address};
+    use crate::{
+        asm::{lexer::lex, parse_lexemes},
+        types::Address,
+    };
 
     #[test]
     fn get_empty_symbol_table() {
@@ -655,7 +655,8 @@ mod tests {
             .fill x1
             .fill x2
             .end"
-            ).is_err()
+            )
+            .is_err()
         );
 
         assert!(
@@ -664,7 +665,8 @@ mod tests {
             .orig x10000
             .fill x1
             .end"
-            ).is_err()
+            )
+            .is_err()
         );
     }
 
@@ -676,7 +678,8 @@ mod tests {
             .orig xFDFF
             .fill x1
             .end"
-            ).is_ok()
+            )
+            .is_ok()
         );
     }
 }

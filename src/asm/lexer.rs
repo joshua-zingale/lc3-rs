@@ -1,4 +1,5 @@
-use crate::asm::types::{Location, ParsingError, ParsingErrorKind, RegisterNum};
+use crate::asm::types::{Location, ParsingError, ParsingErrorKind};
+use crate::types::RegisterNum;
 
 pub fn lex(source: &str) -> Result<Vec<Lexeme>, Vec<Result<Lexeme, ParsingError>>> {
     let lexemes: Vec<_> = Lexer::new(source).collect();
@@ -355,8 +356,8 @@ pub enum InstructionSymbol {
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::RegisterNum;
     use super::*;
+    use crate::types::RegisterNum;
 
     fn lex_unwrap_kind(source: &str) -> Vec<LexemeKind> {
         Lexer::new(source).map(|x| x.unwrap().kind).collect()

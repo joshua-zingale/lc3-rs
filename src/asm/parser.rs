@@ -2,11 +2,9 @@ use std::vec;
 
 use crate::asm::{
     lexer::{DirectiveSymbol, InstructionSymbol, Lexeme, LexemeKind, lex},
-    types::{
-        Address, Either, Imm5, Imm6, Imm9, Imm11, Location, NBitInt, ParsingError,
-        ParsingErrorKind, RegisterNum, TrapVec,
-    },
+    types::{Location, ParsingError, ParsingErrorKind},
 };
+use crate::types::{Address, Either, Imm5, Imm6, Imm9, Imm11, NBitInt, RegisterNum, TrapVec};
 
 pub fn parse(source: &str) -> Result<Vec<Origin>, Vec<ParsingError>> {
     let lexemes = lex(source);
@@ -63,11 +61,12 @@ impl<'a> Parser<'a> {
             .consume(LexemeKind::Directive(DirectiveSymbol::Orig))
             .map_err(|e| {
                 _ = self.consume_any("");
-                vec![e]})?;
-        let (immediate_lexeme, address) =
-            self.consume_immediate::<16, false>().map_err(|e| {
-                _ = self.consume_any("");
-                vec![e]})?;
+                vec![e]
+            })?;
+        let (immediate_lexeme, address) = self.consume_immediate::<16, false>().map_err(|e| {
+            _ = self.consume_any("");
+            vec![e]
+        })?;
 
         let mut errors = Vec::new();
 
@@ -605,8 +604,8 @@ trait StatementArgument {
 #[cfg(test)]
 mod tests {
     use super::super::lexer::lex;
-    use super::super::types::RegisterNum;
     use super::*;
+    use crate::types::RegisterNum;
 
     #[test]
     fn empty_origin() {
